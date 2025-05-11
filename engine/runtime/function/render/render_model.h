@@ -118,8 +118,15 @@ namespace MiniEngine
                 mat.Ns = material.shininess;
                 mat.Ni = material.ior;
         
-                if(!material.diffuse_texname.empty())
+                if (!material.diffuse_texname.empty()) {
                     mat.map_Kd = material.diffuse_texname.c_str();
+                    mat.diffuse_map = make_shared<Image>((model_path + "/" + mat.map_Kd).c_str());
+                }
+                    
+                if (!material.specular_texname.empty()) {
+                    mat.map_Ks = material.specular_texname.c_str();
+                    mat.specular_map = make_shared<Image>((model_path + "/" + mat.map_Ks).c_str());
+                }
 
                 mats[m] = mat;
             }

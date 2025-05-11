@@ -5,11 +5,13 @@ in vec3 Normal;
 in vec3 FragPos;
 
 uniform vec3 viewPos;
+uniform vec3 Kd;
+uniform vec3 ks;
 
 void main()
 {
 	// light
-	vec3 lightColor = vec3(0.8f, 0.8f, 0.8f);
+	vec3 lightColor = vec3(0.8f, 0.0f, 0.0f);
 	vec3 lightPos = viewPos + vec3(0.f, 10.f, 0.f);
 
 	// ambient
@@ -29,6 +31,6 @@ void main()
 	float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16);
 	vec3 specular = specularStrength * spec * lightColor;
 
-	vec3 result = ambient + diffuse + specular;
-	FragColor = vec4(result, 1.0);
+	vec3 result = ambient + Kd * diffuse + ks * specular;
+	FragColor = vec4(0, 1, 0, 1.0);
 }

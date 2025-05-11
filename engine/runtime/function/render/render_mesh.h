@@ -9,6 +9,7 @@
 
 #include <string>
 #include <vector>
+#include "runtime/function/render/render_texture.h"
 
 namespace MiniEngine
 {
@@ -37,6 +38,9 @@ namespace MiniEngine
         float Ni;     // Index of Refraction(IOR) of transparent object like glass and water.
 
         std::string map_Kd;
+        std::string map_Ks;
+        std::shared_ptr<Image> diffuse_map;
+        std::shared_ptr<Image> specular_map;
     };
 
     class Mesh
@@ -46,6 +50,7 @@ namespace MiniEngine
         std::vector<Vertex> vertices;
         std::vector<unsigned int> indices;
         Material material;
+
         unsigned int VAO;
 
         Mesh()=default;
@@ -64,18 +69,24 @@ namespace MiniEngine
         // render the mesh
         void Draw(std::shared_ptr<Shader> shader)
         {
+            shader->setInt("diffuse_map", 0);
+            shader->setInt("specular_map", 1);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, diffuse_tex);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, specular_tex);
             // draw mesh
             glBindVertexArray(VAO);
             glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
             glBindVertexArray(0);
 
             // always good practice to set everything back to defaults once configured.
-            glActiveTexture(GL_TEXTURE0);
         }
 
     private:
         // render data
         unsigned int VBO, EBO;
+        unsigned int diffuse_tex, specular_tex;
 
         // initializes all the buffer objects/arrays
         void setupMesh()
@@ -110,6 +121,46 @@ namespace MiniEngine
             glEnableVertexAttribArray(3);
             glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *)offsetof(Vertex, Tangent));
             glBindVertexArray(0);
+
+            glGenTextures(1, &diffuse_tex);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, diffuse_tex);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);   
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            if (material.diffuse_map->data)
+            {
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, material.diffuse_map->width, material.diffuse_map->height, 0, GL_RGB, GL_UNSIGNED_BYTE, material.diffuse_map->data);
+                glGenerateMipmap(GL_TEXTURE_2D);  //生成mipmap
+            }
+            else
+            {
+                std::cout << "Failed to load diffuse texture" << std::endl;
+            }
+            //glBindTexture(GL_TEXTURE_2D, 0);
+
+            glGenTextures(1, &specular_tex);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, specular_tex);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);   
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            if (material.specular_map->data)
+            {
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, material.specular_map->width, material.specular_map->height, 0, GL_RGB, GL_UNSIGNED_BYTE, material.specular_map->data);
+                glGenerateMipmap(GL_TEXTURE_2D);  //生成mipmap
+            }
+            else
+            {
+                std::cout << "Failed to load specular texture" << std::endl;
+            }
+            //glBindTexture(GL_TEXTURE_2D, 0);
         }
     };
 }

@@ -10,4 +10,5 @@ void main()
 {
 	FragColor = texture(result, TexCoord);
 	FragColor.rgb = pow(FragColor.rgb, vec3(2.2));
+	FragColor.rgb = vec4(1,0,0,1);
 }

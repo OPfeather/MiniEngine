@@ -17,6 +17,8 @@ namespace MiniEngine
     {
     public:
         const static int bytes_per_pixel = 3;
+        unsigned char *data;
+        int width, height;
 
         Image() : data(nullptr), width(0), height(0), bytes_per_scanline(0) {}
 
@@ -31,7 +33,6 @@ namespace MiniEngine
             strcpy(buff,filename);
 
             data = stbi_load(buff, &width, &height, &components_per_pixel, components_per_pixel);
-
             if (!data) {
                 // std::cerr << "ERROR: Could not load texture image file '" << filename << "'.\n";
                 width = height = 0;
@@ -77,8 +78,6 @@ namespace MiniEngine
         }
 
     private:
-        unsigned char *data;
-        int width, height;
         int bytes_per_scanline;
     };
 } // namespace MiniEngine

@@ -705,6 +705,7 @@ static bool CheckProgram(GLuint handle, const char* desc)
     return (GLboolean)status == GL_TRUE;
 }
 
+//创建绘制在窗口的shader
 bool    ImGui_ImplOpenGL3_CreateDeviceObjects()
 {
     ImGui_ImplOpenGL3_Data* bd = ImGui_ImplOpenGL3_GetBackendData();

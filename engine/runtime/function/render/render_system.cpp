@@ -110,7 +110,7 @@ namespace MiniEngine
 
         if (m_ui)
         {
-            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplOpenGL3_NewFrame();//创建新shader绘制到屏幕上
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
 
