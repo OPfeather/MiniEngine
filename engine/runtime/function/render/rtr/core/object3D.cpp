@@ -271,7 +271,7 @@ namespace ff {
 		mChildren.push_back(child);
 	}
 
-	const std::vector<Object3D::Ptr>& Object3D::getChildren() const noexcept {
+	std::vector<Object3D::Ptr>& Object3D::getChildren() noexcept {
 		return mChildren;
 	}
 

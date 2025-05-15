@@ -23,6 +23,10 @@
 #include "editor/include/editor_ui.h"
 #include "runtime/function/render/rtr/scene/scene.h"
 #include "runtime/function/render/rtr/math/frustum.h"
+#include "runtime/function/render/rtr/lights/light.h"
+#include "runtime/function/render/rtr/objects/mesh.h"
+#include "runtime/function/render/rtr/material/material.h"
+#include "runtime/function/render/rtr/geometries/boxGeometry.h"
 
 namespace MiniEngine
 {
@@ -49,6 +53,19 @@ namespace MiniEngine
         POINT_LIGHT,
         AREA_LIGHT,
         IBL
+    };
+
+    class BaseRenderEnviroment
+    {
+        public:
+        //ff::Light::Ptr light{ nullptr };
+        //unsigned int lightVAO, lightIndexCount = 0;
+        bool isRenderFloor = false;
+        glm::vec3 floorPos{ 0,0,0 };
+        ff::Mesh::Ptr floor{ nullptr };
+        ff::Material::Ptr floorMaterial{ nullptr };
+        ff::BoxGeometry::Ptr floorGeometry{ nullptr };
+
     };
 
     struct RenderSystemInitInfo
@@ -87,7 +104,8 @@ namespace MiniEngine
         void rtr_scene();
         void rtr_object();
         void rtr_light_model();
-        void rtr_shader_config(ff::MaterialType materialType) noexcept;//生成shader并设置uniform
+        void rtr_shader_config(ff::MaterialType materialType = ff::MeshBasicMaterialType) noexcept;//生成shader并设置uniform
+        void rtr_process_floor(glm::vec3 pos, ff::MaterialType materialType = ff::MeshBasicMaterialType);
 
         void projectObject(const ff::Object3D::Ptr& object) noexcept;
 
@@ -117,11 +135,12 @@ namespace MiniEngine
         unsigned int texColorBuffer, texDepthBuffer, framebuffer= 0;
 
         unsigned int lightVAO, lightIndexCount = 0;
-        glm::vec3 lightPos= glm::vec3(0.0f, 5.0f, -5.0f);
+        glm::vec3 lightPos= glm::vec3(5.0f, 5.0f, 0.0f);
         unsigned int flooreVAO, floorIndexCount = 0;
 
         unsigned int gBufferFBO = 0;
         GLuint depthMap = 0;
+        BaseRenderEnviroment m_rtr_base_env;
     };
 
     

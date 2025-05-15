@@ -14,6 +14,7 @@
 #include "runtime/function/render/render_swap_context.h"
 #include "runtime/function/render/render_resource.h"
 #include "runtime/function/render/pathtracing/path_tracer.h"
+#include "runtime/function/render/rtr/loader/textureLoader.h"
 
 namespace MiniEngine
 {
@@ -558,27 +559,56 @@ namespace MiniEngine
     void RenderSystem::rtr_shader_config(ff::MaterialType materialType) noexcept {
        std::shared_ptr<ConfigManager> config_manager = g_runtime_global_context.m_config_manager;
        ASSERT(config_manager);
-       //switch(materialType)
-       //{
-       // default:
-       //     std::shared_ptr<Shader>depth_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "shadow_mapping_depth.vs").generic_string().data(),
-       //     (config_manager->getShaderFolder() / "shadow_mapping_depth.fs").generic_string().data());
-       //     
-       //     std::shared_ptr<Shader>shadow_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "shadow_mapping.vs").generic_string().data(),
-       //             (config_manager->getShaderFolder() / "shadow_mapping.fs").generic_string().data());
-       //     
-       //     m_rtr_shader_map["depth"] = depth_shader;
-       //     m_rtr_shader_map["shadow"] = shadow_shader;
-       //     break;
-       //}
-       std::shared_ptr<Shader>depth_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "shadow_mapping_depth.vs").generic_string().data(),
-           (config_manager->getShaderFolder() / "shadow_mapping_depth.fs").generic_string().data());
+       switch(materialType)
+       {
+       case ff::SsrMaterialType:
 
-       std::shared_ptr<Shader>shadow_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "shadow_mapping.vs").generic_string().data(),
-           (config_manager->getShaderFolder() / "shadow_mapping.fs").generic_string().data());
+       
+       default:
+            std::shared_ptr<Shader>depth_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "shadow_mapping_depth.vs").generic_string().data(),
+            (config_manager->getShaderFolder() / "shadow_mapping_depth.fs").generic_string().data());
+            
+            std::shared_ptr<Shader>shadow_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "shadow_mapping.vs").generic_string().data(),
+                    (config_manager->getShaderFolder() / "shadow_mapping.fs").generic_string().data());
+            
+            m_rtr_shader_map["depth"] = depth_shader;
+            m_rtr_shader_map["shadow"] = shadow_shader;
+            break;
+       }
+    }
 
-       m_rtr_shader_map["depth"] = depth_shader;
-       m_rtr_shader_map["shadow"] = shadow_shader;
+    void RenderSystem::rtr_process_floor(glm::vec3 pos, ff::MaterialType materialType) {
+        if (m_rtr_base_env.isRenderFloor)
+        {
+            if (m_rtr_base_env.floor)
+            {
+                m_rtr_base_env.floor->setPosition(pos.x, pos.y, pos.z);
+            }
+            else
+            {
+                m_rtr_base_env.floorGeometry = ff::BoxGeometry::create(10.0, 1.0, 10.0);
+                m_rtr_base_env.floorMaterial = ff::Material::create();
+                //TODO:根据材质加载数据(或者固定材质，但是渲染和灯光一样用单独的shader)
+                m_rtr_base_env.floorMaterial->mDiffuseMap = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/concreteTexture.png");
+                m_rtr_base_env.floor = ff::Mesh::create(m_rtr_base_env.floorGeometry, m_rtr_base_env.floorMaterial);
+                m_rtr_base_env.floor->setPosition(pos.x, pos.y, pos.z);
+                m_rtr_base_env.floorGeometry->createVAO();
+                m_rtr_base_env.floorGeometry->bindVAO();
+                m_rtr_base_env.floorGeometry->setupVertexAttributes();
+                m_rtr_secene->addChild(m_rtr_base_env.floor);
+                rtr_shader_config();
+            }
+
+        }
+        else
+        {
+            auto& render_objs = m_rtr_secene->getChildren();
+            ff::Object3D::Ptr floor = m_rtr_base_env.floor;
+            render_objs.erase(
+                std::remove(render_objs.begin(), render_objs.end(), floor),
+                render_objs.end());
+            m_rtr_base_env.floor = nullptr;
+        }
     }
 
 } // namespace MiniEngine

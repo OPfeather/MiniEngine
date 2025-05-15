@@ -99,7 +99,7 @@ namespace ff {
 
 		glm::mat3 getNormalMatrix() noexcept;
 
-		const std::vector<Object3D::Ptr>& getChildren() const noexcept;
+		std::vector<Object3D::Ptr>& getChildren() noexcept;
 
 		ID getID() const noexcept;
 
