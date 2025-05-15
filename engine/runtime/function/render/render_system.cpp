@@ -64,6 +64,298 @@ namespace MiniEngine
 
         // init path tracer
         m_path_tracer = std::make_shared<PathTracing::PathTracer>();
+
+        m_rtr_secene = ff::Scene::create();
+        m_rtr_frustum = ff::Frustum::create();
+    }
+
+    void renderSphere(unsigned int &sphereVAO, unsigned int &indexCount)
+    {
+        if (sphereVAO == 0)
+        {
+            glGenVertexArrays(1, &sphereVAO);
+
+            unsigned int vbo, ebo;
+            glGenBuffers(1, &vbo);
+            glGenBuffers(1, &ebo);
+
+            std::vector<glm::vec3> positions;
+            std::vector<glm::vec2> uv;
+            std::vector<glm::vec3> normals;
+            std::vector<unsigned int> indices;
+
+            const unsigned int X_SEGMENTS = 64;
+            const unsigned int Y_SEGMENTS = 64;
+            const float PI = 3.14159265359f;
+            for (unsigned int x = 0; x <= X_SEGMENTS; ++x)
+            {
+                for (unsigned int y = 0; y <= Y_SEGMENTS; ++y)
+                {
+                    float xSegment = (float)x / (float)X_SEGMENTS;
+                    float ySegment = (float)y / (float)Y_SEGMENTS;
+                    float xPos = std::cos(xSegment * 2.0f * PI) * std::sin(ySegment * PI);
+                    float yPos = std::cos(ySegment * PI);
+                    float zPos = std::sin(xSegment * 2.0f * PI) * std::sin(ySegment * PI);
+
+                    positions.push_back(glm::vec3(xPos, yPos, zPos));
+                    uv.push_back(glm::vec2(xSegment, ySegment));
+                    normals.push_back(glm::vec3(xPos, yPos, zPos));
+                }
+            }
+
+            bool oddRow = false;
+            for (unsigned int y = 0; y < Y_SEGMENTS; ++y)
+            {
+                if (!oddRow) // even rows: y == 0, y == 2; and so on
+                {
+                    for (unsigned int x = 0; x <= X_SEGMENTS; ++x)
+                    {
+                        indices.push_back(y * (X_SEGMENTS + 1) + x);
+                        indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
+                    }
+                }
+                else
+                {
+                    for (int x = X_SEGMENTS; x >= 0; --x)
+                    {
+                        indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
+                        indices.push_back(y * (X_SEGMENTS + 1) + x);
+                    }
+                }
+                oddRow = !oddRow;
+            }
+            indexCount = static_cast<GLsizei>(indices.size());
+
+            std::vector<float> data;
+            for (unsigned int i = 0; i < positions.size(); ++i)
+            {
+                data.push_back(positions[i].x);
+                data.push_back(positions[i].y);
+                data.push_back(positions[i].z);
+                if (normals.size() > 0)
+                {
+                    data.push_back(normals[i].x);
+                    data.push_back(normals[i].y);
+                    data.push_back(normals[i].z);
+                }
+                if (uv.size() > 0)
+                {
+                    data.push_back(uv[i].x);
+                    data.push_back(uv[i].y);
+                }
+            }
+            glBindVertexArray(sphereVAO);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo);
+            glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), &data[0], GL_STATIC_DRAW);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
+            unsigned int stride = (3 + 2 + 3) * sizeof(float);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+            glEnableVertexAttribArray(2);
+            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
+        }
+
+        glBindVertexArray(sphereVAO);
+        glDrawElements(GL_TRIANGLE_STRIP, indexCount, GL_UNSIGNED_INT, 0);
+    }
+
+    
+
+    void RenderSystem::rtr_light_model()
+    {
+        //TODO:根据光源类型绘制灯光模型
+        std::shared_ptr<ConfigManager> config_manager = g_runtime_global_context.m_config_manager;
+        ASSERT(config_manager);
+        //绘制球形灯源
+        m_rtr_light_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "light.vert").generic_string().data(),
+                                                   (config_manager->getShaderFolder() / "light.frag").generic_string().data());
+        
+        m_rtr_light_shader->use();
+        glm::mat4 projection = m_render_camera->getPersProjMatrix();
+        glm::mat4 view = m_render_camera->getViewMatrix();
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, lightPos);
+        m_rtr_light_shader->setMat4("projection", projection);
+        m_rtr_light_shader->setMat4("view", view);
+        m_rtr_light_shader->setMat4("model", model);
+        renderSphere(lightVAO, lightIndexCount);
+    }
+
+    void RenderSystem::rtr_object()
+    {
+        //绘制球形灯源
+
+        //透视剪裁
+        auto currentViewMatrix = m_render_camera->getPersProjMatrix() * m_render_camera->getViewMatrix();
+        m_rtr_frustum->setFromProjectionMatrix(currentViewMatrix);
+        
+        m_rtr_secene->mOpaques.clear();
+        m_rtr_secene->mTransparents.clear();
+        projectObject(m_rtr_secene);
+
+        //TODO:排序
+
+        //渲染
+        //pass1
+        //TODO:在生成shader的函数里实现
+        if (gBufferFBO == 0)
+        {
+            glGenFramebuffers(1, &gBufferFBO);
+            // - Create depth texture
+            glGenTextures(1, &depthMap);
+            glBindTexture(GL_TEXTURE_2D, depthMap);
+
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, 4096, 4096, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+            GLfloat borderColor[] = { 1.0, 1.0, 1.0, 1.0 };
+            glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, gBufferFBO);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
+            glDrawBuffer(GL_NONE);
+            glReadBuffer(GL_NONE);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+        glViewport(0, 0, 4096, 4096);
+        glBindFramebuffer(GL_FRAMEBUFFER, gBufferFBO);
+        glClear(GL_DEPTH_BUFFER_BIT);
+
+        std::shared_ptr<Shader>depth_shader = m_rtr_shader_map["depth"];
+        std::shared_ptr<Shader>shadow_shader = m_rtr_shader_map["shadow"];
+
+        glm::mat4 lightProjection, lightView;
+        glm::mat4 lightSpaceMatrix;
+        GLfloat near_plane = 1.0f, far_plane = 100.0f;
+        lightProjection = glm::ortho(-50.0f, 50.0f, -50.0f, 50.0f, near_plane, far_plane);
+        //lightProjection = glm::perspective(45.0f, (GLfloat)SHADOW_WIDTH / (GLfloat)SHADOW_HEIGHT, near_plane, far_plane); // Note that if you use a perspective projection matrix you'll have to change the light position as the current light position isn't enough to reflect the whole scene.
+        lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
+        lightSpaceMatrix = lightProjection * lightView;
+        // - now render scene from light's point of view
+        depth_shader->use();
+        depth_shader->setMat4("lightSpaceMatrix", lightSpaceMatrix);
+        for(auto obj : m_rtr_secene->mOpaques)
+        {
+             obj->updateWorldMatrix();
+             glm::mat4 model = obj->getWorldMatrix();
+             depth_shader->setMat4("model", model);
+
+             obj->getGeometry()->bindVAO();
+             auto index = obj->getGeometry()->getIndex();
+             auto position = obj->getGeometry()->getAttribute("position");
+             if (index)
+             {
+                 glDrawElements(GL_TRIANGLES, index->getCount(), ff::toGL(index->getDataType()), 0);
+             }
+             else
+             {
+                 glDrawArrays(GL_TRIANGLES, 0, position->getCount());
+             }
+             glBindVertexArray(0);
+
+            // m_render_shader->use();
+            // glm::mat4 projection = m_render_camera->getPersProjMatrix();
+            // glm::mat4 view = m_render_camera->getViewMatrix();
+            // obj->updateWorldMatrix();
+            // glm::mat4 model = obj->getWorldMatrix();
+            //
+            // m_render_shader->setMat4("projection", projection);
+            // m_render_shader->setMat4("view", view);
+            // m_render_shader->setMat4("model", model);
+            // m_render_shader->setVec3("viewPos", m_render_camera->Position);
+            // m_render_shader->setInt("diffuse_map", 0);
+            // m_render_shader->setInt("specular_map", 1);
+            // if (obj->getMaterial()->mDiffuseMap)
+            // {
+            //     glActiveTexture(GL_TEXTURE0);
+            //     glBindTexture(GL_TEXTURE_2D, obj->getMaterial()->mDiffuseMap->mGlTexture);
+            // }
+            // if (obj->getMaterial()->mSpecularMap)
+            // {
+            //     glActiveTexture(GL_TEXTURE1);
+            //     glBindTexture(GL_TEXTURE_2D, obj->getMaterial()->mSpecularMap->mGlTexture);
+            // }
+
+            // obj->getGeometry()->bindVAO();
+            // auto index = obj->getGeometry()->getIndex();
+            // auto position = obj->getGeometry()->getAttribute("position");
+            // if (index)
+            // {
+            //     glDrawElements(GL_TRIANGLES, index->getCount(), ff::toGL(index->getDataType()), 0);
+            // }
+            // else
+            // {
+            //     glDrawArrays(GL_TRIANGLES, 0, position->getCount());
+            // }
+            //
+            //glBindVertexArray(0);
+            
+        }
+
+        //pass2
+        //refreshFrameBuffer();
+        // draw models in the scene
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glViewport(0, 0, m_viewport.width, m_viewport.height);
+        glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        shadow_shader->use();
+        glm::mat4 projection = m_render_camera->getPersProjMatrix();
+        glm::mat4 view = m_render_camera->getViewMatrix();
+        shadow_shader->setMat4("projection", projection);
+        shadow_shader->setMat4("view", view);
+        // Set light uniforms
+        shadow_shader->setVec3("lightPos", lightPos);
+        shadow_shader->setVec3("viewPos", m_render_camera->Position);
+        shadow_shader->setMat4("lightSpaceMatrix", lightSpaceMatrix);
+        // Enable/Disable shadows by pressing 'SPACE'
+        //glUniform1i(glGetUniformLocation(shader.Program, "shadows"), shadows);
+        //shadow_shader->setInt("shadows", 1);
+        shadow_shader->setInt("diffuseTexture", 0);
+        shadow_shader->setInt("shadowMap", 1);
+
+        for (auto obj : m_rtr_secene->mOpaques)
+        {  
+            if (obj->getMaterial()->mDiffuseMap)
+            {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, obj->getMaterial()->mDiffuseMap->mGlTexture);
+            }
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, depthMap);
+            
+            obj->updateWorldMatrix();
+            auto model = obj->getWorldMatrix();
+            shadow_shader->setMat4("model", model);
+
+            obj->getGeometry()->bindVAO();
+            auto index = obj->getGeometry()->getIndex();
+            auto position = obj->getGeometry()->getAttribute("position");
+            if (index)
+            {
+                glDrawElements(GL_TRIANGLES, index->getCount(), ff::toGL(index->getDataType()), 0);
+            }
+            else
+            {
+                glDrawArrays(GL_TRIANGLES, 0, position->getCount());
+            }
+
+            glBindVertexArray(0);
+
+        }
+    }
+    
+    void RenderSystem::rtr_scene()
+    {
+        //渲染光源等场景
+
+        //渲染物体
     }
 
     void RenderSystem::tick(float delta_time)
@@ -101,10 +393,17 @@ namespace MiniEngine
             m_render_shader->setMat4("model", model);
             m_render_shader->setVec3("viewPos", m_render_camera->Position);
             m_render_model->Draw(m_render_shader);
+            
         }
+        else if (m_rtr_secene->getChildren().size() > 0)
+        {
+            rtr_object();
+        }
+        rtr_light_model();
 
         // draw editor ui
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, m_viewport.width, m_viewport.height);
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -156,7 +455,7 @@ namespace MiniEngine
 
         glGenTextures(1, &texColorBuffer);
         glBindTexture(GL_TEXTURE_2D, texColorBuffer);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glBindTexture(GL_TEXTURE_2D, 0);
@@ -232,6 +531,54 @@ namespace MiniEngine
 
         ImGui_ImplGlfw_InitForOpenGL(m_window, true);
         ImGui_ImplOpenGL3_Init("#version 330");
+    }
+
+    void RenderSystem::projectObject(const ff::Object3D::Ptr& object) noexcept {
+        //当前需要被解析的物体，如果是不可见物体，那么连同其子节点一起都变为不可见状态
+        if (!object->mVisible) return;
+
+        //如果是可渲染物体
+        if (object->mIsRenderableObject) {
+
+            auto renderableObject = std::static_pointer_cast<ff::RenderableObject>(object);
+
+            //首先对object进行一次视景体剪裁测试
+            if (m_rtr_frustum->intersectObject(renderableObject)) {
+
+                m_rtr_secene->mOpaques.push_back(renderableObject);
+            }
+        }
+
+        auto children = object->getChildren();
+        for (auto& child : children) {
+            projectObject(child);
+        }
+    }
+
+    void RenderSystem::rtr_shader_config(ff::MaterialType materialType) noexcept {
+       std::shared_ptr<ConfigManager> config_manager = g_runtime_global_context.m_config_manager;
+       ASSERT(config_manager);
+       //switch(materialType)
+       //{
+       // default:
+       //     std::shared_ptr<Shader>depth_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "shadow_mapping_depth.vs").generic_string().data(),
+       //     (config_manager->getShaderFolder() / "shadow_mapping_depth.fs").generic_string().data());
+       //     
+       //     std::shared_ptr<Shader>shadow_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "shadow_mapping.vs").generic_string().data(),
+       //             (config_manager->getShaderFolder() / "shadow_mapping.fs").generic_string().data());
+       //     
+       //     m_rtr_shader_map["depth"] = depth_shader;
+       //     m_rtr_shader_map["shadow"] = shadow_shader;
+       //     break;
+       //}
+       std::shared_ptr<Shader>depth_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "shadow_mapping_depth.vs").generic_string().data(),
+           (config_manager->getShaderFolder() / "shadow_mapping_depth.fs").generic_string().data());
+
+       std::shared_ptr<Shader>shadow_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "shadow_mapping.vs").generic_string().data(),
+           (config_manager->getShaderFolder() / "shadow_mapping.fs").generic_string().data());
+
+       m_rtr_shader_map["depth"] = depth_shader;
+       m_rtr_shader_map["shadow"] = shadow_shader;
     }
 
 } // namespace MiniEngine

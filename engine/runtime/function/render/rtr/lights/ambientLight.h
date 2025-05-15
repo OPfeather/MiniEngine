@@ -1,0 +1,18 @@
+#pragma once
+#include "light.h"
+
+//环境光源类
+namespace ff {
+
+	class AmbientLight:public Light {
+	public:
+		using Ptr = std::shared_ptr<AmbientLight>;
+		static Ptr create() {
+			return std::make_shared<AmbientLight>();
+		}
+
+		AmbientLight() noexcept;
+
+		~AmbientLight() noexcept;
+	};
+}

@@ -21,6 +21,8 @@
 #include "runtime/function/render/render_swap_context.h"
 #include "runtime/function/render/render_type.h"
 #include "editor/include/editor_ui.h"
+#include "runtime/function/render/rtr/scene/scene.h"
+#include "runtime/function/render/rtr/math/frustum.h"
 
 namespace MiniEngine
 {
@@ -39,6 +41,14 @@ namespace MiniEngine
         float y{0.f};
         float width{0.f};
         float height{0.f};
+    };
+
+    enum LightType
+    {
+        DIRECTION_LIGHT,
+        POINT_LIGHT,
+        AREA_LIGHT,
+        IBL
     };
 
     struct RenderSystemInitInfo
@@ -74,6 +84,13 @@ namespace MiniEngine
         void startRendering();
         void stopRendering();
 
+        void rtr_scene();
+        void rtr_object();
+        void rtr_light_model();
+        void rtr_shader_config(ff::MaterialType materialType) noexcept;//生成shader并设置uniform
+
+        void projectObject(const ff::Object3D::Ptr& object) noexcept;
+
     private:
         void refreshFrameBuffer();
 
@@ -89,7 +106,22 @@ namespace MiniEngine
         std::shared_ptr<Camera> m_viewer_camera;
         std::shared_ptr<PathTracing::PathTracer> m_path_tracer;
 
+        ff::Frustum::Ptr m_rtr_frustum{ nullptr };
+        std::shared_ptr<Shader> m_rtr_light_shader;
+        std::unordered_map<std::string, std::shared_ptr<Shader>> m_rtr_shader_map;
+    
+    public:
+        ff::Scene::Ptr m_rtr_secene{ nullptr };
+        LightType m_rtr_light_type{DIRECTION_LIGHT};
+
         unsigned int texColorBuffer, texDepthBuffer, framebuffer= 0;
+
+        unsigned int lightVAO, lightIndexCount = 0;
+        glm::vec3 lightPos= glm::vec3(0.0f, 5.0f, -5.0f);
+        unsigned int flooreVAO, floorIndexCount = 0;
+
+        unsigned int gBufferFBO = 0;
+        GLuint depthMap = 0;
     };
 
     
