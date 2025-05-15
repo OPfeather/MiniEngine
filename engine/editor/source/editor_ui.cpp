@@ -340,19 +340,20 @@ namespace MiniEngine
                     {
                         //g_runtime_global_context.m_render_system->loadScene(outPath);
                         auto model = ff::AssimpLoader::load(outPath);
+                        g_runtime_global_context.m_render_system->m_rtr_secene->mOpaques.clear();
                         g_runtime_global_context.m_render_system->m_rtr_secene->addChild(model->mObject);
 
                         //生成地板
                         //TODO:地板位置可移动，地板根据材质加载纹理
-                        auto floorGeometry = ff::BoxGeometry::create(10.0, 1.0, 10.0);
-                        auto floorMaterial = ff::Material::create();
-                        floorMaterial->mDiffuseMap = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/concreteTexture.png");
-                        ff::Mesh::Ptr cubeFloor = ff::Mesh::create(floorGeometry, floorMaterial);
-                        cubeFloor->setPosition(.0, -2.5, .0);
-                        floorGeometry->createVAO();
-                        floorGeometry->bindVAO();
-                        floorGeometry->setupVertexAttributes();
-                        g_runtime_global_context.m_render_system->m_rtr_secene->addChild(cubeFloor);
+                        //auto floorGeometry = ff::BoxGeometry::create(10.0, 1.0, 10.0);
+                        //auto floorMaterial = ff::Material::create();
+                        //floorMaterial->mDiffuseMap = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/concreteTexture.png");
+                        //ff::Mesh::Ptr cubeFloor = ff::Mesh::create(floorGeometry, floorMaterial);
+                        //cubeFloor->setPosition(.0, -2.5, .0);
+                        //floorGeometry->createVAO();
+                        //floorGeometry->bindVAO();
+                        //floorGeometry->setupVertexAttributes();
+                        //g_runtime_global_context.m_render_system->m_rtr_secene->addChild(cubeFloor);
                         //TODO:加载材质信息
 
                         g_runtime_global_context.m_render_system->rtr_shader_config(ff::MeshBasicMaterialType);
@@ -621,6 +622,24 @@ namespace MiniEngine
                     LOG_ERROR(NFD_GetError());
                 }
             }
+
+            ImGui::TreePop();
+            ImGui::Spacing();
+        }
+
+        if (ImGui::TreeNode("scene"))
+        {
+            glm::vec3& pos = g_runtime_global_context.m_render_system->m_rtr_base_env.floorPos;
+            if (ImGui::Checkbox("floor", &g_runtime_global_context.m_render_system->m_rtr_base_env.isRenderFloor))
+            {
+                g_runtime_global_context.m_render_system->rtr_process_floor(pos);
+            }
+            ImGui::Text("Position");
+            ImGui::DragFloat("X", &pos.x, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragFloat("Y", &pos.y, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragFloat("Z", &pos.z, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+
+            g_runtime_global_context.m_render_system->rtr_process_floor(pos);
 
             ImGui::TreePop();
             ImGui::Spacing();
