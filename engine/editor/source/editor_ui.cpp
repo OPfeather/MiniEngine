@@ -618,17 +618,63 @@ namespace MiniEngine
 
         if (ImGui::TreeNode("scene"))
         {
-            glm::vec3& pos = g_runtime_global_context.m_render_system->m_rtr_base_env.floorPos;
+            bool res = false;
+            //floor
+            glm::vec3& floorPos = g_runtime_global_context.m_render_system->m_rtr_base_env.floorPos;
             if (ImGui::Checkbox("floor", &g_runtime_global_context.m_render_system->m_rtr_base_env.isRenderFloor))
             {
-                g_runtime_global_context.m_render_system->rtr_process_floor(pos);
+                g_runtime_global_context.m_render_system->rtr_process_floor(floorPos);
             }
             ImGui::Text("Position");
-            ImGui::DragFloat("X", &pos.x, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::DragFloat("Y", &pos.y, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::DragFloat("Z", &pos.z, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            res |= ImGui::DragFloat("F_X", &floorPos.x, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            res |= ImGui::DragFloat("F_Y", &floorPos.y, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            res |= ImGui::DragFloat("F_Z", &floorPos.z, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            if (res)
+            {
+                g_runtime_global_context.m_render_system->rtr_process_floor(floorPos);
+            }
+                
+            //light
+            ImGui::Text("Light");
+            const char* items[] = { "Direction Light", "Point Light", "Area Light", "Cube Light"};
+            static int currentItem = 0;
+            static int previousItem = -1;  // 保存上一次选择的值
+            glm::vec3& lightPos = g_runtime_global_context.m_render_system->m_rtr_base_env.lightPos;
+            if (ImGui::Combo("Type", &currentItem, items, IM_ARRAYSIZE(items)))
+            {
+                if (currentItem != previousItem)
+                {
+                    previousItem = currentItem;
 
-            g_runtime_global_context.m_render_system->rtr_process_floor(pos);
+                    // 根据选项执行不同的逻辑
+                    switch (currentItem)
+                    {
+                    case 0:
+                        g_runtime_global_context.m_render_system->m_rtr_base_env.light->mType = ff::DIRECTION_LIGHT;
+                        break;
+                    case 1:
+                        g_runtime_global_context.m_render_system->m_rtr_base_env.light->mType = ff::POINT_LIGHT;
+                        break;
+                    case 2:
+                        g_runtime_global_context.m_render_system->m_rtr_base_env.light->mType = ff::AREA_LIGHT;
+                        break;
+                    case 3:
+                        g_runtime_global_context.m_render_system->m_rtr_base_env.light->mType = ff::IBL;
+                        break;
+                    }
+                }
+            }
+            ImGui::Text("Position");
+            res = false;
+            res |= ImGui::DragFloat("L_X", &lightPos.x, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            res |= ImGui::DragFloat("L_Y", &lightPos.y, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            res |= ImGui::DragFloat("L_Z", &lightPos.z, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            if ( res )
+            {
+                g_runtime_global_context.m_render_system->m_rtr_base_env.light->updatePosition(lightPos);
+                g_runtime_global_context.m_render_system->m_rtr_base_env.light->updateViewMatrix();
+            }
+            
 
             ImGui::TreePop();
             ImGui::Spacing();

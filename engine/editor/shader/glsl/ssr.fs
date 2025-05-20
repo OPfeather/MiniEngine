@@ -8,7 +8,7 @@ uniform sampler2D uGShadow;
 uniform sampler2D uGPosWorld;
 
 in mat4 vWorldToScreen;
-in vec4 vPosWorld;
+in vec2 vTexCoords;
 
 out vec4 FragColor;
 
@@ -137,8 +137,6 @@ vec3 EvalDirectionalLight(vec2 uv) {
   return Le;
 }
 
-
-
 bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
   float step = 0.05;
   const int totalStepTimes = 1000; 
@@ -150,6 +148,7 @@ bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
   for(int curStepTimes = 0; curStepTimes < totalStepTimes; curStepTimes++)
   {
     vec2 screenUV = GetScreenCoordinate(curPos);
+    if(screenUV.x > 1.0f || screenUV.y > 1.0f) return false;
     float rayDepth = GetDepth(curPos);
     float gBufferDepth = GetGBufferDepth(screenUV);
 
@@ -166,9 +165,10 @@ bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
 
 vec3 EvalReflect(vec3 wi, vec3 wo, vec2 uv) {
   vec3 worldNormal = GetGBufferNormalWorld(uv);
+  vec3 worldPos = texture2D(uGPosWorld, uv).xyz;
   vec3 relfectDir = normalize(reflect(-wo, worldNormal));
   vec3 hitPos;
-  if(RayMarch(vPosWorld.xyz, relfectDir, hitPos)){
+  if(RayMarch(worldPos, relfectDir, hitPos)){
       vec2 screenUV = GetScreenCoordinate(hitPos);
       return GetGBufferDiffuse(screenUV);
   }
@@ -177,18 +177,26 @@ vec3 EvalReflect(vec3 wi, vec3 wo, vec2 uv) {
   }
 }
 
-#define SAMPLE_NUM 50
+#define SAMPLE_NUM 10
 
 void main() {
   float s = InitRand(gl_FragCoord.xy);
+  float epsilon = 1e-5f;
 
   vec3 L = vec3(0.0);
-  //L = GetGBufferDiffuse(GetScreenCoordinate(vPosWorld.xyz));
-
-  vec3 worldPos = vPosWorld.xyz;
-  vec2 screenUV = GetScreenCoordinate(vPosWorld.xyz);
+  vec3 worldPos = texture2D(uGPosWorld, vTexCoords).xyz;
+//   vec3 worldNormal = texture2D(uGNormalWorld, vTexCoords).xyz;
+  
+//    if(length(worldNormal) < 1e-6)
+//    {
+//         FragColor = vec4(vec3(GetGBufferDiffuse(vTexCoords).rgb), 1.0);
+//         return;
+//    }
+  vec2 screenUV = GetScreenCoordinate(worldPos);
   vec3 wi = normalize(uLightDir);
   vec3 wo = normalize(uCameraPos - worldPos);
+
+  //L = GetGBufferDiffuse(vTexCoords);
 
   // 直接光照
   L = EvalDiffuse(wi, wo, screenUV) * EvalDirectionalLight(screenUV);
@@ -213,9 +221,9 @@ void main() {
     }
   }
 
-  L_ind /= float(SAMPLE_NUM);
+    L_ind /= float(SAMPLE_NUM);
 
-  L = L + L_ind;
+    L = L + L_ind;
 
   //vec3 color = pow(clamp(L, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
   vec3 color = L;

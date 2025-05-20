@@ -159,16 +159,23 @@ namespace ff {
 		const Object3D::Ptr& object,
 		std::string vsCode, std::string fsCode
 	) {
-		auto renderObject = std::static_pointer_cast<RenderableObject>(object);
-		auto geometry = renderObject->getGeometry();
-
-		//新建一个parameters
 		auto parameters = DriverProgram::Parameters::create();
 
 
 		//shaderIter->second 即 shader struct object
 		parameters->mVertex = vsCode;
 		parameters->mFragment = fsCode;
+
+		if (material == nullptr || object == nullptr)
+		{
+			return parameters;
+		}
+		
+		auto renderObject = std::static_pointer_cast<RenderableObject>(object);
+		auto geometry = renderObject->getGeometry();
+
+		//新建一个parameters
+		
 
 		if (geometry->hasAttribute("normal")) {
 			parameters->mHasNormal = true;

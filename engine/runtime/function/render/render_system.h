@@ -48,24 +48,17 @@ namespace MiniEngine
         float height{0.f};
     };
 
-    enum LightType
-    {
-        DIRECTION_LIGHT,
-        POINT_LIGHT,
-        AREA_LIGHT,
-        IBL
-    };
-
     class BaseRenderEnviroment
     {
         public:
-        //ff::Light::Ptr light{ nullptr };
-        //unsigned int lightVAO, lightIndexCount = 0;
-        bool isRenderFloor = false;
-        glm::vec3 floorPos{ 0,0,0 };
-        ff::Mesh::Ptr floor{ nullptr };
-        ff::Material::Ptr floorMaterial{ nullptr };
-        ff::BoxGeometry::Ptr floorGeometry{ nullptr };
+            ff::Light::Ptr light{ nullptr };
+            glm::vec3 lightPos{ 0,5,5 };
+
+            bool isRenderFloor = false;
+            glm::vec3 floorPos{ 0,0,0 };
+            ff::Mesh::Ptr floor{ nullptr };
+            ff::Material::Ptr floorMaterial{ nullptr };
+            ff::BoxGeometry::Ptr floorGeometry{ nullptr };
 
     };
 
@@ -116,6 +109,7 @@ namespace MiniEngine
         void phone_render();
         void pcss_shadow_render();
         void ssr_render();
+        void renderQuad();
 
         GLFWwindow *m_window;
         WindowUI *m_ui;
@@ -135,17 +129,19 @@ namespace MiniEngine
     
     public:
         ff::Scene::Ptr m_rtr_secene{ nullptr };
-        LightType m_rtr_light_type{DIRECTION_LIGHT};
 
         unsigned int texColorBuffer, texDepthBuffer, framebuffer= 0;
 
-        unsigned int lightVAO, lightIndexCount = 0;
-        glm::vec3 lightPos= glm::vec3(2.5f, 6.0f, 4.0f);
         unsigned int flooreVAO, floorIndexCount = 0;
 
+        unsigned int quadVAO = 0;
+        unsigned int quadVBO;
+
+        //深度缓冲
         unsigned int depthBufferFBO = 0;
         GLuint depthMap = 0;
         
+        //Gbuffer
         unsigned int gBufferFBO = 0;
         GLuint ssColorMap = 0;
         GLuint ssDepthMap = 0;  //经过mvp变换的线性深度（离相机的距离，不是深度缓冲里归一化的深度）
@@ -155,6 +151,8 @@ namespace MiniEngine
         GLuint gBufferRboDepth = 0; //帧缓冲对象必须有深度附件，否则不会进行深度测试
         
         BaseRenderEnviroment m_rtr_base_env;
+
+        bool updateFBO = false;  //修改窗口大小时，需要修改FBO里的分辨率
     };
 
     

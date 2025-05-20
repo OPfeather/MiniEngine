@@ -4,12 +4,12 @@
 #include "../math/frustum.h"
 #include "../render/renderTarget.h"
 
-//¹âÔ´²úÉúµÄÒõÓ°Àà£¬ÎªÉú³ÉÒõÓ°ÌùÍ¼Ìá¹©±ØÒªµÄ²ÎÊı
+//ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó°ï¿½à£¬Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó°ï¿½ï¿½Í¼ï¿½á¹©ï¿½ï¿½Òªï¿½Ä²ï¿½ï¿½ï¿½
 namespace ff {
 
 	class Light;
 
-	//ÃèÊöÁËÒ»Õµ¹âÔ´£¬¹ØÓÚÆäÒõÓ°Ïà¹ØµÄ¸÷Àà²ÎÊı
+	//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»Õµï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó°ï¿½ï¿½ØµÄ¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	class LightShadow {
 	public:
 		using Ptr = std::shared_ptr<LightShadow>;
@@ -20,36 +20,28 @@ namespace ff {
 		LightShadow(const Camera::Ptr& camera) noexcept;
 
 		~LightShadow() noexcept;
-
-		virtual void updateMatrices(const std::shared_ptr<Light>& light) noexcept;
-
-		uint32_t getViewportCount() const noexcept;
-
-		glm::vec4 getViewport(const uint32_t& index);
-
-		Frustum::Ptr getFrustum() const noexcept;
  
 	public:
-		Camera::Ptr				mCamera{ nullptr };//·ÅÔÚ¹âÔ´Î»ÖÃ£¬ÓÃÓÚäÖÈ¾Éî¶ÈÌùÍ¼µÄÉãÏñ»ú
-		float					mBias{ -0.003f };//ÎªÁË·ÀÖ¹ShadowAnceµÄÉî¶ÈÆ«ÒÆÁ¿
-		float					mRadius{ 1.0f };//·ÀÖ¹±ßÔµ¹ıÓ²µÄÊ±ºò£¬²ÉÓÃµÄÃ××ÖĞÍ²ÉÑù·¶Î§µÄ´óĞ¡
+		Camera::Ptr				mCamera{ nullptr };//ï¿½ï¿½ï¿½Ú¹ï¿½Ô´Î»ï¿½Ã£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¾ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+		float					mBias{ -0.003f };//Îªï¿½Ë·ï¿½Ö¹ShadowAnceï¿½ï¿½ï¿½ï¿½ï¿½Æ«ï¿½ï¿½ï¿½ï¿½
+		float					mRadius{ 1.0f };//ï¿½ï¿½Ö¹ï¿½ï¿½Ôµï¿½ï¿½Ó²ï¿½ï¿½Ê±ï¿½ò£¬²ï¿½ï¿½Ãµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í²ï¿½ï¿½ï¿½ï¿½ï¿½Î§ï¿½Ä´ï¿½Ğ¡
 
-		glm::vec2				mMapSize = glm::vec2(512.0, 512.0);//ShadowMap·Ö±æÂÊµÄ´óĞ¡ 
+		glm::vec2				mMapSize = glm::vec2(512.0, 512.0);//ShadowMapï¿½Ö±ï¿½ï¿½ÊµÄ´ï¿½Ğ¡ 
 
-		//¶ÔÓÚ¹âÔ´»òÕßÒõÓ°£¬ÔÛÃÇÏµÍ³ÊµÏÖÁËÆ½ĞĞ¹âÏµÍ³£¬µ«ÊÇ»¹Ã»ÓĞÊµÏÖµã¹âÔ´
-		//ÕæÕıÏëÈ¥ÁË½âµã¹âÔ´»æÖÆµÄÍ¬Ñ§£¬¿ÉÒÔ¿´ÏÂthreejsµÄÒıÇæÊµÏÖ
+		//ï¿½ï¿½ï¿½Ú¹ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÏµÍ³Êµï¿½ï¿½ï¿½ï¿½Æ½ï¿½Ğ¹ï¿½ÏµÍ³ï¿½ï¿½ï¿½ï¿½ï¿½Ç»ï¿½Ã»ï¿½ï¿½Êµï¿½Öµï¿½ï¿½Ô´
+		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¥ï¿½Ë½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½Æµï¿½Í¬Ñ§ï¿½ï¿½ï¿½ï¿½ï¿½Ô¿ï¿½ï¿½ï¿½threejsï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½
 		glm::vec2				mFrameExtent = glm::vec2(1.0, 1.0);
 		std::vector<glm::vec4>	mViewports = { glm::vec4(0.0f, 0.0f, 1.0f, 1.0f) };
 
-		RenderTarget::Ptr		mRenderTarget{ nullptr };//µ±Ç°µÄShadowMapËù¶ÔÓ¦µÄäÖÈ¾Ä¿±ê,ShadowMap¾Í·ÅÔÚÁËËûµÄColorAttachment
+		RenderTarget::Ptr		mRenderTarget{ nullptr };//ï¿½ï¿½Ç°ï¿½ï¿½ShadowMapï¿½ï¿½ï¿½ï¿½Ó¦ï¿½ï¿½ï¿½ï¿½È¾Ä¿ï¿½ï¿½,ShadowMapï¿½Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ColorAttachment
 
-		//1 ½«ÎïÌåµÄ¶¥µã£¬´ÓÊÀ½ç×ø±êÏµ£¬×ª»¯µ½¹âÔ´ÉãÏñ»úµÄÍ¶Ó°×ø±êÏµÄÚ£¨NDC×ø±ê×é-»¹Ã»ÓĞ³ıÒÔw£©
-		//2 projectionMatrix * viewMatrix£¨¹âÔ´Ïà»ú£©
-		//3 ÁíÍâ»¹µÃ°ÑNDC×ø±ê´Ó-1µ½1£¬×ª»¯Îª0-1
+		//1 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¶ï¿½ï¿½ã£¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ïµï¿½ï¿½×ªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¶Ó°ï¿½ï¿½ï¿½ï¿½Ïµï¿½Ú£ï¿½NDCï¿½ï¿½ï¿½ï¿½ï¿½ï¿½-ï¿½ï¿½Ã»ï¿½Ğ³ï¿½ï¿½ï¿½wï¿½ï¿½
+		//2 projectionMatrix * viewMatrixï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ï¿½
+		//3 ï¿½ï¿½ï¿½â»¹ï¿½Ã°ï¿½NDCï¿½ï¿½ï¿½ï¿½ï¿½-1ï¿½ï¿½1ï¿½ï¿½×ªï¿½ï¿½Îª0-1
 		glm::mat4				mMatrix = glm::mat4(1.0f);
 
 	protected:
-		//ÓÃÀ´°ïÖú¹âÔ´ÉãÏñ»ú½øĞĞÊÓ¾°Ìå¼ô²Ã
+		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		Frustum::Ptr			mFrustum = Frustum::create();
 	};
 }

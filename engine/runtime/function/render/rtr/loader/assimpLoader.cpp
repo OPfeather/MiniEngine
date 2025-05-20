@@ -6,8 +6,6 @@
 #include "../material/cubeMaterial.h"
 #include "../material/depthMaterial.h"
 #include "../material/meshBasicMaterial.h"
-#include "../material/prtMaterial.h"
-#include "../material/brdfMaterial.h"
 #include "../material/kullaContyMaterial.h"
 #include "../loader/textureLoader.h"
 #include "../loader/cache.h"
@@ -200,19 +198,6 @@ namespace ff {
 			case MaterialType::MeshPhongMaterialType:
 				material = MeshPhongMaterial::create();
 				break;
-			case MaterialType::PrtMaterialType: {
-				auto prtMaterial = PrtMaterial::create();
-				readLightFileByColumn("assets/textures/GraceCathedral/light.txt", prtMaterial->prtLi);
-				material = prtMaterial;
-				break;
-			}
-			case MaterialType::BrdfMaterialType: {
-				auto brdfMaterial = BrdfMaterial::create();
-				brdfMaterial->mMetallic = 1.0;
-				brdfMaterial->mRoughness = 0.95;
-				material = brdfMaterial;
-				break;
-			}
 			case MaterialType::KullaContyMaterialType: {
 				auto kullaContyMaterial = KullaContyMaterial::create();
 				kullaContyMaterial->mMetallic = 1.0;

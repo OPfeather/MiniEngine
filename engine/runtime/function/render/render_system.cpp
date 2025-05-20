@@ -33,7 +33,7 @@ namespace MiniEngine
         // configure global opengl state
         glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
-        glEnable(GL_MULTISAMPLE);
+        //glEnable(GL_MULTISAMPLE);
         glEnable(GL_FRAMEBUFFER_SRGB);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
@@ -69,104 +69,10 @@ namespace MiniEngine
         m_rtr_secene = ff::Scene::create();
         m_rtr_frustum = ff::Frustum::create();
         m_rtr_shader_programs = ff::DriverPrograms::create();
+        m_rtr_base_env.light = ff::Light::create(m_rtr_base_env.lightPos);
     }
 
-    void renderSphere(unsigned int &sphereVAO, unsigned int &indexCount)
-    {
-        if (sphereVAO == 0)
-        {
-            glGenVertexArrays(1, &sphereVAO);
-
-            unsigned int vbo, ebo;
-            glGenBuffers(1, &vbo);
-            glGenBuffers(1, &ebo);
-
-            std::vector<glm::vec3> positions;
-            std::vector<glm::vec2> uv;
-            std::vector<glm::vec3> normals;
-            std::vector<unsigned int> indices;
-
-            const unsigned int X_SEGMENTS = 64;
-            const unsigned int Y_SEGMENTS = 64;
-            const float PI = 3.14159265359f;
-            for (unsigned int x = 0; x <= X_SEGMENTS; ++x)
-            {
-                for (unsigned int y = 0; y <= Y_SEGMENTS; ++y)
-                {
-                    float xSegment = (float)x / (float)X_SEGMENTS;
-                    float ySegment = (float)y / (float)Y_SEGMENTS;
-                    float xPos = std::cos(xSegment * 2.0f * PI) * std::sin(ySegment * PI);
-                    float yPos = std::cos(ySegment * PI);
-                    float zPos = std::sin(xSegment * 2.0f * PI) * std::sin(ySegment * PI);
-
-                    positions.push_back(glm::vec3(xPos, yPos, zPos));
-                    uv.push_back(glm::vec2(xSegment, ySegment));
-                    normals.push_back(glm::vec3(xPos, yPos, zPos));
-                }
-            }
-
-            bool oddRow = false;
-            for (unsigned int y = 0; y < Y_SEGMENTS; ++y)
-            {
-                if (!oddRow) // even rows: y == 0, y == 2; and so on
-                {
-                    for (unsigned int x = 0; x <= X_SEGMENTS; ++x)
-                    {
-                        indices.push_back(y * (X_SEGMENTS + 1) + x);
-                        indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
-                    }
-                }
-                else
-                {
-                    for (int x = X_SEGMENTS; x >= 0; --x)
-                    {
-                        indices.push_back((y + 1) * (X_SEGMENTS + 1) + x);
-                        indices.push_back(y * (X_SEGMENTS + 1) + x);
-                    }
-                }
-                oddRow = !oddRow;
-            }
-            indexCount = static_cast<GLsizei>(indices.size());
-
-            std::vector<float> data;
-            for (unsigned int i = 0; i < positions.size(); ++i)
-            {
-                data.push_back(positions[i].x);
-                data.push_back(positions[i].y);
-                data.push_back(positions[i].z);
-                if (normals.size() > 0)
-                {
-                    data.push_back(normals[i].x);
-                    data.push_back(normals[i].y);
-                    data.push_back(normals[i].z);
-                }
-                if (uv.size() > 0)
-                {
-                    data.push_back(uv[i].x);
-                    data.push_back(uv[i].y);
-                }
-            }
-            glBindVertexArray(sphereVAO);
-            glBindBuffer(GL_ARRAY_BUFFER, vbo);
-            glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), &data[0], GL_STATIC_DRAW);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
-            unsigned int stride = (3 + 2 + 3) * sizeof(float);
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
-            glEnableVertexAttribArray(2);
-            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
-        }
-
-        glBindVertexArray(sphereVAO);
-        glDrawElements(GL_TRIANGLE_STRIP, indexCount, GL_UNSIGNED_INT, 0);
-    }
-
-    unsigned int quadVAO = 0;
-    unsigned int quadVBO;
-    void renderQuad()
+    void RenderSystem::renderQuad()
     {
         if (quadVAO == 0)
         {
@@ -206,11 +112,11 @@ namespace MiniEngine
         glm::mat4 projection = m_render_camera->getPersProjMatrix();
         glm::mat4 view = m_render_camera->getViewMatrix();
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, lightPos);
+        model = glm::translate(model, m_rtr_base_env.lightPos);
         m_rtr_light_shader->setMat4("projection", projection);
         m_rtr_light_shader->setMat4("view", view);
         m_rtr_light_shader->setMat4("model", model);
-        renderSphere(lightVAO, lightIndexCount);
+        m_rtr_base_env.light->light_shape_render();
     }
 
     void RenderSystem::phone_render()
@@ -268,14 +174,8 @@ namespace MiniEngine
         config_FBO(ff::DepthShader);
         ff::DriverProgram::Ptr depth_shader = nullptr;
         ff::DriverProgram::Ptr pcss_shader = nullptr;
-
-        glm::mat4 lightProjection, lightView;
-        glm::mat4 lightSpaceMatrix;
-        GLfloat near_plane = 1.0f, far_plane = 100.0f;
-        lightProjection = glm::ortho(-50.0f, 50.0f, -50.0f, 50.0f, near_plane, far_plane);
-        //lightProjection = glm::perspective(45.0f, (GLfloat)SHADOW_WIDTH / (GLfloat)SHADOW_HEIGHT, near_plane, far_plane); // Note that if you use a perspective projection matrix you'll have to change the light position as the current light position isn't enough to reflect the whole scene.
-        lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
-        lightSpaceMatrix = lightProjection * lightView;
+        
+        glm::mat4 lightSpaceMatrix = m_rtr_base_env.light->getProjectionMatrix() * m_rtr_base_env.light->getViewMatrix();
         // - now render scene from light's point of view
        
         for (auto obj : m_rtr_secene->mOpaques)
@@ -310,9 +210,9 @@ namespace MiniEngine
         // draw models in the scene
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glViewport(0, 0, m_viewport.width, m_viewport.height);
-        glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+        //glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+        
         for (auto obj : m_rtr_secene->mOpaques)
         {
             ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
@@ -326,7 +226,7 @@ namespace MiniEngine
             pcss_shader->setMat4("projection", projection);
             pcss_shader->setMat4("view", view);
             // Set light uniforms
-            pcss_shader->setVec3("lightPos", lightPos);
+            pcss_shader->setVec3("lightPos", m_rtr_base_env.lightPos);
             pcss_shader->setVec3("viewPos", m_render_camera->Position);
             pcss_shader->setMat4("lightSpaceMatrix", lightSpaceMatrix);
 
@@ -365,32 +265,7 @@ namespace MiniEngine
             }
 
             glBindVertexArray(0);
-
         }
-    }
-
-    // 判断两个向量是否近似共线
-    bool isNearlyColinear(const glm::vec3& v1, const glm::vec3& v2, float epsilon = 1e-4f) {
-        float dot = glm::dot(glm::normalize(v1), glm::normalize(v2));
-        return glm::abs(glm::abs(dot) - 1.0f) < epsilon;
-    }
-
-    // 安全的 lookAt 实现
-    glm::mat4 lookAtSafe(const glm::vec3& eye, const glm::vec3& center, glm::vec3 up) {
-        glm::vec3 forward = glm::normalize(center - eye);
-
-        // 如果 forward 和 up 向量几乎共线，选择一个替代的 up 向量
-        if (isNearlyColinear(forward, up)) {
-            // 选一个和 forward 不共线的新 up
-            if (!isNearlyColinear(forward, glm::vec3(0, 0, 1))) {
-                up = glm::vec3(0, 0, 1);
-            }
-            else {
-                up = glm::vec3(1, 0, 0); // fallback
-            }
-        }
-
-        return glm::lookAt(eye, center, up);
     }
 
     void RenderSystem::ssr_render()
@@ -409,14 +284,8 @@ namespace MiniEngine
         get_shader_code(ff::DepthShader, depth_shader_vs, depth_shader_fs);
         config_FBO(ff::DepthShader);
         
-        glm::mat4 lightProjection, lightView;
-        glm::mat4 lightSpaceMatrix;
-        GLfloat near_plane = 1.0f, far_plane = 100.0f;
-        lightProjection = glm::ortho(-50.0f, 50.0f, -50.0f, 50.0f, near_plane, far_plane);
-        //lightProjection = glm::perspective(45.0f, (GLfloat)SHADOW_WIDTH / (GLfloat)SHADOW_HEIGHT, near_plane, far_plane); // Note that if you use a perspective projection matrix you'll have to change the light position as the current light position isn't enough to reflect the whole scene.
-        //lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
-        lightView = lookAtSafe(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
-        lightSpaceMatrix = lightProjection * lightView;
+        m_rtr_base_env.light->updateViewMatrix();
+        glm::mat4 lightSpaceMatrix = m_rtr_base_env.light->getProjectionMatrix() * m_rtr_base_env.light->getViewMatrix();
         // - now render scene from light's point of view
 
         for (auto obj : m_rtr_secene->mOpaques)
@@ -449,6 +318,10 @@ namespace MiniEngine
         //pass2：渲染gBuffer
         get_shader_code(ff::SsrGbufferShader, gBuffer_shader_vs, gBuffer_shader_fs);
         config_FBO(ff::SsrGbufferShader);
+        glEnable(GL_STENCIL_TEST);
+        glStencilFunc(GL_ALWAYS, 1, 0xFF);
+        glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+        glStencilMask(0xFF);
         
         for (auto obj : m_rtr_secene->mOpaques)
         {
@@ -511,62 +384,55 @@ namespace MiniEngine
         // draw models in the scene
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glViewport(0, 0, m_viewport.width, m_viewport.height);
-        glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        //glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        glDisable(GL_DEPTH_TEST);
+        glEnable(GL_STENCIL_TEST);
+        glStencilFunc(GL_EQUAL, 1, 0xFF);
+
+        //模板测试在片段着色器前进行，这里将gbuffer的模板复制过来，进行模板测试，避免渲染空白区域光照
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
+        glBlitFramebuffer(0, 0, m_viewport.width, m_viewport.height,
+            0, 0, m_viewport.width, m_viewport.height,
+            GL_STENCIL_BUFFER_BIT, GL_NEAREST);
         get_shader_code(ff::SsrShader, ssr_shader_vs, ssr_shader_fs);
 
-        for (auto obj : m_rtr_secene->mOpaques)
-        {
-            ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-                obj->getMaterial(), obj, ssr_shader_vs, ssr_shader_fs);
-            HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
-            ssr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
+        ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
+            nullptr, nullptr, ssr_shader_vs, ssr_shader_fs);
+        HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+        ssr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
-            ssr_shader->use();
-            glm::mat4 projection = m_render_camera->getPersProjMatrix();
-            glm::mat4 view = m_render_camera->getViewMatrix();
-            ssr_shader->setMat4("uProjectionMatrix", projection);
-            ssr_shader->setMat4("uViewMatrix", view);
-            obj->updateWorldMatrix();
-            auto model = obj->getWorldMatrix();
-            ssr_shader->setMat4("uModelMatrix", model);
-            // Set light uniforms
-            ssr_shader->setVec3("uLightDir", lightPos);
-            ssr_shader->setVec3("uCameraPos", m_render_camera->Position);
-            glm::vec3 lightRadiance(1.0, 1.0, 1.0);
-            ssr_shader->setVec3("uLightRadiance", lightRadiance);
+        ssr_shader->use();
+        glm::mat4 projection = m_render_camera->getPersProjMatrix();
+        glm::mat4 view = m_render_camera->getViewMatrix();
+        ssr_shader->setMat4("uProjectionMatrix", projection);
+        ssr_shader->setMat4("uViewMatrix", view);
+        // Set light uniforms
+        ssr_shader->setVec3("uLightDir", m_rtr_base_env.lightPos);
+        ssr_shader->setVec3("uCameraPos", m_render_camera->Position);
+        glm::vec3 lightRadiance(1.0, 1.0, 1.0);
+        ssr_shader->setVec3("uLightRadiance", lightRadiance);
 
-            ssr_shader->setInt("uGDiffuse", 0);
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, ssColorMap);
-            ssr_shader->setInt("uGDepth", 1);
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, ssDepthMap);
-            ssr_shader->setInt("uGNormalWorld", 2);
-            glActiveTexture(GL_TEXTURE2);
-            glBindTexture(GL_TEXTURE_2D, ssNormalMap);
-            ssr_shader->setInt("uGShadow", 3);
-            glActiveTexture(GL_TEXTURE3);
-            glBindTexture(GL_TEXTURE_2D, ssVisibilityMap);
-            ssr_shader->setInt("uGPosWorld", 4);     
-            glActiveTexture(GL_TEXTURE4);
-            glBindTexture(GL_TEXTURE_2D, ssWorldPosMap);
+        ssr_shader->setInt("uGDiffuse", 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, ssColorMap);
+        ssr_shader->setInt("uGDepth", 1);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, ssDepthMap);
+        ssr_shader->setInt("uGNormalWorld", 2);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, ssNormalMap);
+        ssr_shader->setInt("uGShadow", 3);
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_2D, ssVisibilityMap);
+        ssr_shader->setInt("uGPosWorld", 4);     
+        glActiveTexture(GL_TEXTURE4);
+        glBindTexture(GL_TEXTURE_2D, ssWorldPosMap);
 
-            obj->getGeometry()->bindVAO();
-            auto index = obj->getGeometry()->getIndex();
-            auto position = obj->getGeometry()->getAttribute("position");
-            if (index)
-            {
-                glDrawElements(GL_TRIANGLES, index->getCount(), ff::toGL(index->getDataType()), 0);
-            }
-            else
-            {
-                glDrawArrays(GL_TRIANGLES, 0, position->getCount());
-            }
-
-            glBindVertexArray(0);
-
-        }
+        renderQuad();
+        glDisable(GL_STENCIL_TEST);
+        glEnable(GL_DEPTH_TEST);
     }
 
     void RenderSystem::rtr_object()
@@ -590,7 +456,6 @@ namespace MiniEngine
             pcss_shadow_render();
             break;
         case ff::SsrMaterialType:
-            glEnable(GL_DEPTH_TEST);
             ssr_render();
             break;
         default:
@@ -610,11 +475,9 @@ namespace MiniEngine
         // refresh render target frame buffer
         refreshFrameBuffer();
         
-
-        // draw models in the scene
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glViewport(0, 0, m_viewport.width, m_viewport.height);
-        glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+        //glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (!g_is_editor_mode)
@@ -630,19 +493,19 @@ namespace MiniEngine
             m_canvas_shader->setMat4("model", model);
             m_render_canvas->Draw(m_canvas_shader);
         }
-        else if (m_render_model)
-        {
-            m_render_shader->use();
-            glm::mat4 projection = m_render_camera->getPersProjMatrix();
-            glm::mat4 view = m_render_camera->getViewMatrix();
-            glm::mat4 model = glm::mat4(1.0f);
-            m_render_shader->setMat4("projection", projection);
-            m_render_shader->setMat4("view", view);
-            m_render_shader->setMat4("model", model);
-            m_render_shader->setVec3("viewPos", m_render_camera->Position);
-            m_render_model->Draw(m_render_shader);
-            
-        }
+        //else if (m_render_model)
+        //{
+        //    m_render_shader->use();
+        //    glm::mat4 projection = m_render_camera->getPersProjMatrix();
+        //    glm::mat4 view = m_render_camera->getViewMatrix();
+        //    glm::mat4 model = glm::mat4(1.0f);
+        //    m_render_shader->setMat4("projection", projection);
+        //    m_render_shader->setMat4("view", view);
+        //    m_render_shader->setMat4("model", model);
+        //    m_render_shader->setVec3("viewPos", m_render_camera->Position);
+        //    m_render_model->Draw(m_render_shader);
+        //    
+        //}
         else if (m_rtr_secene->getChildren().size() > 0)
         {
             rtr_object();
@@ -653,7 +516,7 @@ namespace MiniEngine
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, m_viewport.width, m_viewport.height);
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (m_ui)
         {
@@ -715,8 +578,21 @@ namespace MiniEngine
         glBindRenderbuffer(GL_RENDERBUFFER, 0);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, texDepthBuffer);
 
-        // if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        //     LOG_WARN("framebuffer is not complete");
+        //GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        //if (status != GL_FRAMEBUFFER_COMPLETE)
+        //{
+        //    std::cerr << "Framebuffer incomplete: ";
+        //    switch (status) {
+        //    case GL_FRAMEBUFFER_UNDEFINED: std::cerr << "UNDEFINED"; break;
+        //    case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT: std::cerr << "INCOMPLETE_ATTACHMENT"; break;
+        //    case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT: std::cerr << "MISSING_ATTACHMENT"; break;
+        //    case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER: std::cerr << "DRAW_BUFFER"; break;
+        //    case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER: std::cerr << "READ_BUFFER"; break;
+        //    case GL_FRAMEBUFFER_UNSUPPORTED: std::cerr << "UNSUPPORTED"; break;
+        //    default: std::cerr << "UNKNOWN"; break;
+        //    }
+        //    std::cerr << std::endl;
+        //}
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
@@ -759,6 +635,10 @@ namespace MiniEngine
 
     void RenderSystem::updateEngineContentViewport(float offset_x, float offset_y, float width, float height)
     {
+        if (m_viewport.width != width || m_viewport.width != height)
+        {
+            updateFBO = true;
+        }
         m_viewport.x = offset_x;
         m_viewport.y = offset_y;
         m_viewport.width = width;
@@ -871,6 +751,34 @@ namespace MiniEngine
     }
 
     void RenderSystem::config_FBO(ff::ShaderType shaderType) noexcept {
+        if (updateFBO)
+        {
+            if (depthBufferFBO != 0)
+            {
+                glDeleteFramebuffers(1, &depthBufferFBO);
+                glDeleteTextures(1, &depthMap);
+                depthBufferFBO = 0;
+                depthMap = 0;
+            }
+            if (gBufferFBO != 0)
+            {
+                glDeleteFramebuffers(1, &gBufferFBO);
+                glDeleteTextures(1, &ssColorMap);
+                glDeleteTextures(1, &ssDepthMap);
+                glDeleteTextures(1, &ssNormalMap);
+                glDeleteTextures(1, &ssVisibilityMap);
+                glDeleteTextures(1, &ssWorldPosMap);
+                glDeleteRenderbuffers(1, &gBufferRboDepth);
+                gBufferFBO = 0;
+                ssColorMap = 0;
+                ssDepthMap = 0;
+                ssNormalMap = 0;
+                ssVisibilityMap = 0;
+                ssWorldPosMap = 0;
+                gBufferRboDepth = 0;
+            }
+            updateFBO = false;
+        }
         switch(shaderType)
         {
             case ff::DepthShader:
@@ -911,10 +819,7 @@ namespace MiniEngine
                     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-                    GLfloat borderColor[] = { 1.0, 1.0, 1.0, 1.0 };
-                    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ssColorMap, 0);
 
                     glGenTextures(1, &ssDepthMap);
@@ -922,10 +827,6 @@ namespace MiniEngine
                     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_FLOAT, NULL);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-                    GLfloat depthBorderColor[] = { 1000.0, 1000.0, 1000.0, 1000.0 };
-                    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, depthBorderColor);
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, ssDepthMap, 0);
 
                     // normal color buffer
@@ -934,9 +835,6 @@ namespace MiniEngine
                     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, m_viewport.width, m_viewport.height, 0, GL_RGB, GL_FLOAT, NULL);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-                    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, ssNormalMap, 0);
 
                     glGenTextures(1, &ssVisibilityMap);
@@ -944,9 +842,6 @@ namespace MiniEngine
                     glTexImage2D(GL_TEXTURE_2D, 0, GL_R16F, m_viewport.width, m_viewport.height, 0, GL_RED, GL_FLOAT, NULL);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-                    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, ssVisibilityMap, 0);
                     
                     glGenTextures(1, &ssWorldPosMap);
@@ -954,9 +849,6 @@ namespace MiniEngine
                     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, m_viewport.width, m_viewport.height, 0, GL_RGB, GL_FLOAT, NULL);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-                    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT4, GL_TEXTURE_2D, ssWorldPosMap, 0);
 
                     unsigned int attachments[5] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4 };
@@ -965,8 +857,9 @@ namespace MiniEngine
                     //必须添加深度缓冲，否则不会进行深度测试
                     glGenRenderbuffers(1, &gBufferRboDepth);
                     glBindRenderbuffer(GL_RENDERBUFFER, gBufferRboDepth);
-                    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, m_viewport.width, m_viewport.height);
-                    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, gBufferRboDepth);
+                    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_viewport.width, m_viewport.height);
+                    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+                    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gBufferRboDepth);
                     
                     // tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
                     
@@ -980,8 +873,8 @@ namespace MiniEngine
                 }
                 glViewport(0, 0, m_viewport.width, m_viewport.height);
                 glBindFramebuffer(GL_FRAMEBUFFER, gBufferFBO);
-                
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                //glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
                 break;
         }
         
