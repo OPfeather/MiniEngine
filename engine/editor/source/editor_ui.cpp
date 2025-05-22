@@ -343,7 +343,7 @@ namespace MiniEngine
                         auto& render_objs = g_runtime_global_context.m_render_system->m_rtr_secene->getChildren();
                         render_objs.clear();
                         g_runtime_global_context.m_render_system->m_rtr_secene->addChild(model->mObject);
-                        g_runtime_global_context.m_render_system->m_rtr_secene->mSceneMaterialType = ff::BrdfMaterialType;
+                        g_runtime_global_context.m_render_system->m_rtr_secene->mSceneMaterialType = ff::SsrMaterialType;
                         //TODO:加载材质信息
                         g_runtime_global_context.m_render_system->m_rtr_secene->mBRDFLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_E_LUT.png", nullptr, 0, 0, true);
                         g_runtime_global_context.m_render_system->m_rtr_secene->mEavgLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_Eavg_LUT.png", nullptr, 0, 0, true);

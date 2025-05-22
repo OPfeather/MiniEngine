@@ -111,6 +111,7 @@ namespace MiniEngine
         void pcss_shadow_render();
         void ssr_render();
         void pbr_render();
+        void pbr_ssr_render();
         void renderQuad();
 
         GLFWwindow *m_window;
@@ -148,7 +149,7 @@ namespace MiniEngine
         GLuint ssColorMap = 0;
         GLuint ssDepthMap = 0;  //经过mvp变换的线性深度（离相机的距离，不是深度缓冲里归一化的深度）
         GLuint ssNormalMap = 0;
-        GLuint ssVisibilityMap = 0;
+        GLuint ssVRM = 0;   //存储可见性、粗糙度和金属度
         GLuint ssWorldPosMap = 0;
         GLuint gBufferRboDepth = 0; //帧缓冲对象必须有深度附件，否则不会进行深度测试
         

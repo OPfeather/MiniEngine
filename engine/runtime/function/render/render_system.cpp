@@ -425,7 +425,7 @@ namespace MiniEngine
         glBindTexture(GL_TEXTURE_2D, ssNormalMap);
         ssr_shader->setInt("uGShadow", 3);
         glActiveTexture(GL_TEXTURE3);
-        glBindTexture(GL_TEXTURE_2D, ssVisibilityMap);
+        glBindTexture(GL_TEXTURE_2D, ssVRM);
         ssr_shader->setInt("uGPosWorld", 4);     
         glActiveTexture(GL_TEXTURE4);
         glBindTexture(GL_TEXTURE_2D, ssWorldPosMap);
@@ -515,6 +515,191 @@ namespace MiniEngine
         }
     }
 
+    void RenderSystem::pbr_ssr_render()
+    {
+        std::string depth_shader_vs;
+        std::string depth_shader_fs;
+        std::string gBuffer_shader_vs;
+        std::string gBuffer_shader_fs;
+        std::string pbr_ssr_shader_vs;
+        std::string pbr_ssr_shader_fs;
+        ff::DriverProgram::Ptr depth_shader = nullptr;
+        ff::DriverProgram::Ptr gBuffer_shader = nullptr;
+        ff::DriverProgram::Ptr pbr_ssr_shader = nullptr;
+
+        //psaa1:渲染深度
+        get_shader_code(ff::DepthShader, depth_shader_vs, depth_shader_fs);
+        config_FBO(ff::DepthShader);
+
+        m_rtr_base_env.light->updateViewMatrix();
+        glm::mat4 lightSpaceMatrix = m_rtr_base_env.light->getProjectionMatrix() * m_rtr_base_env.light->getViewMatrix();
+        // - now render scene from light's point of view
+
+        for (auto obj : m_rtr_secene->mOpaques)
+        {
+            ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
+                obj->getMaterial(), obj, depth_shader_vs, depth_shader_fs);
+            HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+            depth_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
+
+            depth_shader->use();
+            depth_shader->setMat4("lightSpaceMatrix", lightSpaceMatrix);
+            obj->updateWorldMatrix();
+            glm::mat4 model = obj->getWorldMatrix();
+            depth_shader->setMat4("model", model);
+
+            obj->getGeometry()->bindVAO();
+            auto index = obj->getGeometry()->getIndex();
+            auto position = obj->getGeometry()->getAttribute("position");
+            if (index)
+            {
+                glDrawElements(GL_TRIANGLES, index->getCount(), ff::toGL(index->getDataType()), 0);
+            }
+            else
+            {
+                glDrawArrays(GL_TRIANGLES, 0, position->getCount());
+            }
+            glBindVertexArray(0);
+        }
+
+        //pass2：渲染gBuffer
+        get_shader_code(ff::SsrGbufferShader, gBuffer_shader_vs, gBuffer_shader_fs);
+        config_FBO(ff::SsrGbufferShader);
+        glEnable(GL_STENCIL_TEST);
+        glStencilFunc(GL_ALWAYS, 1, 0xFF);
+        glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+        glStencilMask(0xFF);
+
+        for (auto obj : m_rtr_secene->mOpaques)
+        {
+            ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
+                obj->getMaterial(), obj, gBuffer_shader_vs, gBuffer_shader_fs);
+            HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+            gBuffer_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
+
+            gBuffer_shader->use();
+            glm::mat4 projection = m_render_camera->getPersProjMatrix();
+            glm::mat4 view = m_render_camera->getViewMatrix();
+            gBuffer_shader->setMat4("uProjectionMatrix", projection);
+            gBuffer_shader->setMat4("uViewMatrix", view);
+            obj->updateWorldMatrix();
+            auto model = obj->getWorldMatrix();
+            gBuffer_shader->setMat4("uModelMatrix", model);
+            // Set light uniforms
+            gBuffer_shader->setMat4("uLightVP", lightSpaceMatrix);
+
+            if (obj->getMaterial()->mIsFloortMaterial)
+            {
+                gBuffer_shader->setFloat("uMetallic", m_rtr_base_env.metallic);
+                gBuffer_shader->setFloat("uRoughness", m_rtr_base_env.roughness);
+            }
+            else
+            {
+                gBuffer_shader->setFloat("uMetallic", m_rtr_secene->metallic);
+                gBuffer_shader->setFloat("uRoughness", m_rtr_secene->roughness);
+            }
+
+            if (obj->getMaterial()->mDiffuseMap)
+            {
+                gBuffer_shader->setInt("udiffuseMap", 0);
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, obj->getMaterial()->mDiffuseMap->mGlTexture);
+            }
+            else
+            {
+                glm::vec3 Kd(obj->getMaterial()->mKd[0], obj->getMaterial()->mKd[1], obj->getMaterial()->mKd[2]);
+                gBuffer_shader->setVec3("uKd", Kd);
+            }
+
+            if (obj->getMaterial()->mNormalMap)
+            {
+                gBuffer_shader->setInt("uNormalTexture", 1);
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, obj->getMaterial()->mNormalMap->mGlTexture);
+            }
+
+            gBuffer_shader->setInt("uShadowMap", 2);
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, depthMap);
+
+            obj->getGeometry()->bindVAO();
+            auto index = obj->getGeometry()->getIndex();
+            auto position = obj->getGeometry()->getAttribute("position");
+            if (index)
+            {
+                glDrawElements(GL_TRIANGLES, index->getCount(), ff::toGL(index->getDataType()), 0);
+            }
+            else
+            {
+                glDrawArrays(GL_TRIANGLES, 0, position->getCount());
+            }
+            glBindVertexArray(0);
+
+        }
+
+        //pass3:屏幕空间光追
+        //refreshFrameBuffer();
+        // draw models in the scene
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glViewport(0, 0, m_viewport.width, m_viewport.height);
+        //glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        glDisable(GL_DEPTH_TEST);
+        glEnable(GL_STENCIL_TEST);
+        glStencilFunc(GL_EQUAL, 1, 0xFF);
+
+        //模板测试在片段着色器前进行，这里将gbuffer的模板复制过来，进行模板测试，避免渲染空白区域光照
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
+        glBlitFramebuffer(0, 0, m_viewport.width, m_viewport.height,
+            0, 0, m_viewport.width, m_viewport.height,
+            GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
+        get_shader_code(ff::SsrShader, pbr_ssr_shader_vs, pbr_ssr_shader_fs);
+
+        ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
+            nullptr, nullptr, pbr_ssr_shader_vs, pbr_ssr_shader_fs);
+        HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+        pbr_ssr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
+
+        pbr_ssr_shader->use();
+        glm::mat4 projection = m_render_camera->getPersProjMatrix();
+        glm::mat4 view = m_render_camera->getViewMatrix();
+        pbr_ssr_shader->setMat4("uProjectionMatrix", projection);
+        pbr_ssr_shader->setMat4("uViewMatrix", view);
+        // Set light uniforms
+        pbr_ssr_shader->setVec3("uLightDir", m_rtr_base_env.lightPos);
+        pbr_ssr_shader->setVec3("uCameraPos", m_render_camera->Position);
+        glm::vec3 lightRadiance(1.0, 1.0, 1.0);
+        pbr_ssr_shader->setVec3("uLightRadiance", lightRadiance);
+
+        pbr_ssr_shader->setInt("uGDiffuse", 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, ssColorMap);
+        pbr_ssr_shader->setInt("uGDepth", 1);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, ssDepthMap);
+        pbr_ssr_shader->setInt("uGNormalWorld", 2);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, ssNormalMap);
+        pbr_ssr_shader->setInt("uGVRM", 3);
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_2D, ssVRM);
+        pbr_ssr_shader->setInt("uGPosWorld", 4);
+        glActiveTexture(GL_TEXTURE4);
+        glBindTexture(GL_TEXTURE_2D, ssWorldPosMap);
+
+        pbr_ssr_shader->setInt("uBRDFLut", 5);
+        glActiveTexture(GL_TEXTURE5);
+        glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mBRDFLut->mGlTexture);
+        pbr_ssr_shader->setInt("uEavgLut", 6);
+        glActiveTexture(GL_TEXTURE6);
+        glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mEavgLut->mGlTexture);
+
+        renderQuad();
+        glDisable(GL_STENCIL_TEST);
+        glEnable(GL_DEPTH_TEST);
+    }
+
     void RenderSystem::rtr_object()
     {
         //绘制球形灯源
@@ -536,7 +721,8 @@ namespace MiniEngine
             pcss_shadow_render();
             break;
         case ff::SsrMaterialType:
-            ssr_render();
+            //ssr_render();
+            pbr_ssr_render();
             break;
         case ff::BrdfMaterialType:
             pbr_render();
@@ -795,8 +981,10 @@ namespace MiniEngine
            break;
 
        case ff::SsrShader:
-           vertexPath = (config_manager->getShaderFolder() / "ssr.vs").generic_string();
-           fragmentPath = (config_manager->getShaderFolder() / "ssr.fs").generic_string();
+           //vertexPath = (config_manager->getShaderFolder() / "ssr.vs").generic_string();
+           //fragmentPath = (config_manager->getShaderFolder() / "ssr.fs").generic_string();
+           vertexPath = (config_manager->getShaderFolder() / "brdf_ssr.vs").generic_string();
+           fragmentPath = (config_manager->getShaderFolder() / "brdf_ssr.fs").generic_string();
            break;
 
         case ff::BrdfShader:
@@ -854,14 +1042,14 @@ namespace MiniEngine
                 glDeleteTextures(1, &ssColorMap);
                 glDeleteTextures(1, &ssDepthMap);
                 glDeleteTextures(1, &ssNormalMap);
-                glDeleteTextures(1, &ssVisibilityMap);
+                glDeleteTextures(1, &ssVRM);
                 glDeleteTextures(1, &ssWorldPosMap);
                 glDeleteRenderbuffers(1, &gBufferRboDepth);
                 gBufferFBO = 0;
                 ssColorMap = 0;
                 ssDepthMap = 0;
                 ssNormalMap = 0;
-                ssVisibilityMap = 0;
+                ssVRM = 0;
                 ssWorldPosMap = 0;
                 gBufferRboDepth = 0;
             }
@@ -925,12 +1113,12 @@ namespace MiniEngine
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, ssNormalMap, 0);
 
-                    glGenTextures(1, &ssVisibilityMap);
-                    glBindTexture(GL_TEXTURE_2D, ssVisibilityMap);
-                    glTexImage2D(GL_TEXTURE_2D, 0, GL_R16F, m_viewport.width, m_viewport.height, 0, GL_RED, GL_FLOAT, NULL);
+                    glGenTextures(1, &ssVRM);
+                    glBindTexture(GL_TEXTURE_2D, ssVRM);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, m_viewport.width, m_viewport.height, 0, GL_RGB, GL_FLOAT, NULL);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, ssVisibilityMap, 0);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, ssVRM, 0);
                     
                     glGenTextures(1, &ssWorldPosMap);
                     glBindTexture(GL_TEXTURE_2D, ssWorldPosMap);
