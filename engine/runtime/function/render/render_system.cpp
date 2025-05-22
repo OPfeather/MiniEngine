@@ -34,7 +34,7 @@ namespace MiniEngine
         glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
         //glEnable(GL_MULTISAMPLE);
-        glEnable(GL_FRAMEBUFFER_SRGB);
+        //glEnable(GL_FRAMEBUFFER_SRGB);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
         // setup window & viewport
@@ -395,7 +395,7 @@ namespace MiniEngine
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
         glBlitFramebuffer(0, 0, m_viewport.width, m_viewport.height,
             0, 0, m_viewport.width, m_viewport.height,
-            GL_STENCIL_BUFFER_BIT, GL_NEAREST);
+            GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
         get_shader_code(ff::SsrShader, ssr_shader_vs, ssr_shader_fs);
 
         ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
@@ -411,7 +411,7 @@ namespace MiniEngine
         // Set light uniforms
         ssr_shader->setVec3("uLightDir", m_rtr_base_env.lightPos);
         ssr_shader->setVec3("uCameraPos", m_render_camera->Position);
-        glm::vec3 lightRadiance(1.0, 1.0, 1.0);
+        glm::vec3 lightRadiance(10.0, 10.0, 10.0);
         ssr_shader->setVec3("uLightRadiance", lightRadiance);
 
         ssr_shader->setInt("uGDiffuse", 0);
@@ -433,6 +433,86 @@ namespace MiniEngine
         renderQuad();
         glDisable(GL_STENCIL_TEST);
         glEnable(GL_DEPTH_TEST);
+    }
+
+    void RenderSystem::pbr_render()
+    {
+        std::string pbr_shader_vs;
+        std::string pbr_shader_fs;
+        ff::DriverProgram::Ptr pbr_shader = nullptr;
+
+        get_shader_code(ff::BrdfShader, pbr_shader_vs, pbr_shader_fs);
+
+        // - now render scene from light's point of view
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glViewport(0, 0, m_viewport.width, m_viewport.height);
+        //glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
+        for (auto obj : m_rtr_secene->mOpaques)
+        {
+            ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
+                obj->getMaterial(), obj, pbr_shader_vs, pbr_shader_fs);
+            HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+            pbr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
+
+            pbr_shader->use();
+            glm::mat4 projection = m_render_camera->getPersProjMatrix();
+            glm::mat4 view = m_render_camera->getViewMatrix();
+            pbr_shader->setMat4("uProjectionMatrix", projection);
+            pbr_shader->setMat4("uViewMatrix", view);
+            obj->updateWorldMatrix();
+            auto model = obj->getWorldMatrix();
+            pbr_shader->setMat4("uModelMatrix", model);
+            pbr_shader->setVec3("uLightPos", m_rtr_base_env.lightPos);
+            pbr_shader->setVec3("uLightDir", m_rtr_base_env.lightPos);
+            pbr_shader->setVec3("uCameraPos", m_render_camera->Position);
+            glm::vec3 lightRadiance(1.0, 1.0, 1.0);
+            pbr_shader->setVec3("uLightRadiance", lightRadiance);
+
+            if (obj->getMaterial()->mDiffuseMap)
+            {
+                pbr_shader->setInt("uAlbedoMap", 0);
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, obj->getMaterial()->mDiffuseMap->mGlTexture);
+            }
+            else
+            {
+                glm::vec3 Kd(obj->getMaterial()->mKd[0], obj->getMaterial()->mKd[1], obj->getMaterial()->mKd[2]);
+                pbr_shader->setVec3("uKd", Kd);
+            }
+
+            pbr_shader->setInt("uBRDFLut", 1);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mBRDFLut->mGlTexture);
+            pbr_shader->setInt("uEavgLut", 2);
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mEavgLut->mGlTexture);
+
+            if (obj->getMaterial()->mIsFloortMaterial)
+            {
+                pbr_shader->setFloat("uMetallic", m_rtr_base_env.metallic);
+                pbr_shader->setFloat("uRoughness", m_rtr_base_env.roughness);
+            }
+            else
+            {
+                pbr_shader->setFloat("uMetallic", m_rtr_secene->metallic);
+                pbr_shader->setFloat("uRoughness", m_rtr_secene->roughness);
+            }
+
+            obj->getGeometry()->bindVAO();
+            auto index = obj->getGeometry()->getIndex();
+            auto position = obj->getGeometry()->getAttribute("position");
+            if (index)
+            {
+                glDrawElements(GL_TRIANGLES, index->getCount(), ff::toGL(index->getDataType()), 0);
+            }
+            else
+            {
+                glDrawArrays(GL_TRIANGLES, 0, position->getCount());
+            }
+            glBindVertexArray(0);
+        }
     }
 
     void RenderSystem::rtr_object()
@@ -457,6 +537,9 @@ namespace MiniEngine
             break;
         case ff::SsrMaterialType:
             ssr_render();
+            break;
+        case ff::BrdfMaterialType:
+            pbr_render();
             break;
         default:
             phone_render();
@@ -715,6 +798,11 @@ namespace MiniEngine
            vertexPath = (config_manager->getShaderFolder() / "ssr.vs").generic_string();
            fragmentPath = (config_manager->getShaderFolder() / "ssr.fs").generic_string();
            break;
+
+        case ff::BrdfShader:
+            vertexPath = (config_manager->getShaderFolder() / "brdf.vs").generic_string();
+            fragmentPath = (config_manager->getShaderFolder() / "brdf.fs").generic_string();
+            break;
        
        default:
            vertexPath = (config_manager->getShaderFolder() / "lit.vs").generic_string();
@@ -892,6 +980,7 @@ namespace MiniEngine
             {
                 m_rtr_base_env.floorGeometry = ff::BoxGeometry::create(50.0, 1.0, 50.0);
                 m_rtr_base_env.floorMaterial = ff::Material::create();
+                m_rtr_base_env.floorMaterial->mIsFloortMaterial = true;
                 //TODO:根据材质加载数据(或者固定材质，但是渲染和灯光一样用单独的shader)
                 m_rtr_base_env.floorMaterial->mDiffuseMap = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/concreteTexture.png");
                 m_rtr_base_env.floor = ff::Mesh::create(m_rtr_base_env.floorGeometry, m_rtr_base_env.floorMaterial);

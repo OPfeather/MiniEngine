@@ -195,22 +195,7 @@ namespace ff {
 			//todo: we may need more material model
 			//由于我们只实现了MeshPhongmaterial这种模型通用的材质，所以一律写成PhongMaterial
 			switch (materialType) {
-			case MaterialType::MeshPhongMaterialType:
-				material = MeshPhongMaterial::create();
-				break;
-			case MaterialType::KullaContyMaterialType: {
-				auto kullaContyMaterial = KullaContyMaterial::create();
-				kullaContyMaterial->mMetallic = 1.0;
-				kullaContyMaterial->mRoughness = 0.95;
-				kullaContyMaterial->mBRDFLut = ff::TextureLoader::load("assets/models/ball/GGX_E_LUT.png", nullptr, 0, 0, true);
-				//kullaContyMaterial->mBRDFLut = ff::TextureLoader::load("assets/models/ball/GGX_E_MC_LUT.png");
-				kullaContyMaterial->mEavgLut = ff::TextureLoader::load("assets/models/ball/GGX_Eavg_LUT.png", nullptr, 0, 0, true);
-				material = kullaContyMaterial;
-				break;
-			}
-			case MaterialType::MeshPcssMaterialType:
-				material = MeshPcssMaterial::create();
-				break;
+
 			default:
 				material = MeshPhongMaterial::create();
 				break;
