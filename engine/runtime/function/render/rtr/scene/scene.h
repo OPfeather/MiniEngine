@@ -27,6 +27,13 @@ namespace ff {
 		//天空盒
 		CubeTexture::Ptr mBackground = nullptr;
 
+		//预计算
+		Texture::Ptr	mBRDFLut{ nullptr };
+		Texture::Ptr	mEavgLut{ nullptr };
+
+		float metallic = 1.0;
+		float roughness = 0.9;
+
 		std::vector<RenderableObject::Ptr> mOpaques{};//存储非透明物体的智能指针
 		std::vector<RenderableObject::Ptr> mTransparents{};//存储透明物体的智能指针
 	};

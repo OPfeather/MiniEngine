@@ -24,6 +24,7 @@ namespace ff {
 		bool mIsBrdfMaterial = false;
 		bool mIsKullaContyMaterial = false;
 		bool mIsAreaLightMaterial = false;
+		bool mIsFloortMaterial = false;  //地板特殊处理
 	};
 
 	class Material:public MaterialTypeChecker {

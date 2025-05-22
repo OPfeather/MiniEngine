@@ -343,9 +343,11 @@ namespace MiniEngine
                         auto& render_objs = g_runtime_global_context.m_render_system->m_rtr_secene->getChildren();
                         render_objs.clear();
                         g_runtime_global_context.m_render_system->m_rtr_secene->addChild(model->mObject);
-                        g_runtime_global_context.m_render_system->m_rtr_secene->mSceneMaterialType = ff::SsrMaterialType;
+                        g_runtime_global_context.m_render_system->m_rtr_secene->mSceneMaterialType = ff::BrdfMaterialType;
                         //TODO:加载材质信息
-
+                        g_runtime_global_context.m_render_system->m_rtr_secene->mBRDFLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_E_LUT.png", nullptr, 0, 0, true);
+                        g_runtime_global_context.m_render_system->m_rtr_secene->mEavgLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_Eavg_LUT.png", nullptr, 0, 0, true);
+                        //g_runtime_global_context.m_render_system->rtr_process_floor(g_runtime_global_context.m_render_system->m_rtr_base_env.floorPos);
                         free(outPath);
                     }
                     else if ( result == NFD_CANCEL ) {}
@@ -621,6 +623,8 @@ namespace MiniEngine
             bool res = false;
             //floor
             glm::vec3& floorPos = g_runtime_global_context.m_render_system->m_rtr_base_env.floorPos;
+            float &metallic = g_runtime_global_context.m_render_system->m_rtr_base_env.metallic;
+            float &roughness = g_runtime_global_context.m_render_system->m_rtr_base_env.roughness;
             if (ImGui::Checkbox("floor", &g_runtime_global_context.m_render_system->m_rtr_base_env.isRenderFloor))
             {
                 g_runtime_global_context.m_render_system->rtr_process_floor(floorPos);
@@ -633,6 +637,8 @@ namespace MiniEngine
             {
                 g_runtime_global_context.m_render_system->rtr_process_floor(floorPos);
             }
+            ImGui::DragFloat("Metallic", &metallic, 0.001f, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragFloat("Roughness", &roughness, 0.001f, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
                 
             //light
             ImGui::Text("Light");
@@ -706,6 +712,10 @@ namespace MiniEngine
                     }
                 }
             }
+            float& metallic = g_runtime_global_context.m_render_system->m_rtr_secene->metallic;
+            float& roughness = g_runtime_global_context.m_render_system->m_rtr_secene->roughness;
+            ImGui::DragFloat("Metallic", &metallic, 0.001f, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragFloat("Roughness", &roughness, 0.001f, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
 
             ImGui::TreePop();
             ImGui::Spacing();

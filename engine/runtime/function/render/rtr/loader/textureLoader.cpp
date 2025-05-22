@@ -94,7 +94,6 @@ namespace ff {
 			texture = Texture::create(source->mWidth, source->mHeight);
 		}
 
-
 		texture->mSource = source;
 		Cache::getInstance()->cacheSource(filePath, source);
 		texture->textureSet();

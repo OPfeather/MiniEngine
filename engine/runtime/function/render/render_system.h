@@ -55,11 +55,12 @@ namespace MiniEngine
             glm::vec3 lightPos{ 0,5,5 };
 
             bool isRenderFloor = false;
-            glm::vec3 floorPos{ 0,0,0 };
+            glm::vec3 floorPos{ 0,-3,0 };
             ff::Mesh::Ptr floor{ nullptr };
             ff::Material::Ptr floorMaterial{ nullptr };
             ff::BoxGeometry::Ptr floorGeometry{ nullptr };
-
+            float metallic = 1.0;
+            float roughness = 0.9;
     };
 
     struct RenderSystemInitInfo
@@ -109,6 +110,7 @@ namespace MiniEngine
         void phone_render();
         void pcss_shadow_render();
         void ssr_render();
+        void pbr_render();
         void renderQuad();
 
         GLFWwindow *m_window;
