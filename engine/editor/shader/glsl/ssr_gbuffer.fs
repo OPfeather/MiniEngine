@@ -8,6 +8,8 @@
   uniform sampler2D uNormalTexture;
 #endif
 uniform sampler2D uShadowMap;
+uniform float uMetallic;
+uniform float uRoughness;
 
 in mat4 vWorldToLight;
 in vec2 vTextureCoord;
@@ -18,7 +20,7 @@ in float vDepth;
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outDepth;
 layout(location = 2) out vec3 outNormal;
-layout(location = 3) out float outShadow;
+layout(location = 3) out vec3 outVRM;
 layout(location = 4) out vec3 outWorldPos;
 
 float SimpleShadowMap(vec3 posWorld,float bias){
@@ -66,6 +68,6 @@ void main(void) {
   outNormal = vNormalWorld;
 #endif
 
-  outShadow = SimpleShadowMap(vPosWorld.xyz, 1e-3);
+  outVRM = vec3(SimpleShadowMap(vPosWorld.xyz, 1e-3), uRoughness, uMetallic);
   outWorldPos = vPosWorld.xyz;
 }

@@ -185,13 +185,6 @@ void main() {
 
   vec3 L = vec3(0.0);
   vec3 worldPos = texture2D(uGPosWorld, vTexCoords).xyz;
-//   vec3 worldNormal = texture2D(uGNormalWorld, vTexCoords).xyz;
-  
-//    if(length(worldNormal) < 1e-6)
-//    {
-//         FragColor = vec4(vec3(GetGBufferDiffuse(vTexCoords).rgb), 1.0);
-//         return;
-//    }
   vec2 screenUV = GetScreenCoordinate(worldPos);
   vec3 wi = normalize(uLightDir);
   vec3 wo = normalize(uCameraPos - worldPos);
@@ -217,7 +210,7 @@ void main() {
     vec3 position_1;
     if(RayMarch(worldPos, dir, position_1)){
       vec2 hitScreenUV = GetScreenCoordinate(position_1);
-      L_ind += EvalDiffuse(dir, wo, screenUV) / pdf * EvalDiffuse(wi, dir, hitScreenUV) * EvalDirectionalLight(hitScreenUV);
+      L_ind += EvalDiffuse(dir, wo, screenUV) / pdf * EvalDiffuse(wi, -dir, hitScreenUV) * EvalDirectionalLight(hitScreenUV);
     }
   }
 
