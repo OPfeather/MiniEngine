@@ -2,6 +2,7 @@
 #include "../global/base.h"
 #include "../objects/renderableObject.h"
 #include "../material/material.h"
+#include "../lights/light.h"
 
 namespace ff {
 
@@ -26,7 +27,7 @@ namespace ff {
 			bool			mHasEnvCubeMap{ false };//本次绘制的模型所使用的材质是否有环境贴图
 			bool			mHasSpecularMap{ false };//本次绘制的模型所使用的材质是否有镜面反射贴图
 			bool			mHasNormalMap{ false };//本次绘制的模型所使用的材质是否有镜面反射贴图
-
+			LightType       mLightType = DIRECTION_LIGHT;
 			uint32_t		mDepthPacking{ 0 };
 		};
 
@@ -137,6 +138,7 @@ namespace ff {
 		DriverProgram::Parameters::Ptr getParameters(
 			const Material::Ptr& material,
 			const Object3D::Ptr& object,
+			LightType lightType,
 			std::string vsCode, std::string fsCode);
 
 		HashType getProgramCacheKey(const DriverProgram::Parameters::Ptr& parameters) noexcept;

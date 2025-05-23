@@ -7,7 +7,7 @@ uniform mat4 uModelMatrix;
 uniform mat4 uViewMatrix;
 uniform mat4 uProjectionMatrix;
 
-out mat4 vWorldToLight;
+out vec4 fragPosLightSpace;
 
 out vec2 vTextureCoord;
 out vec3 vNormalWorld;
@@ -20,7 +20,7 @@ void main(void) {
   vec4 normalWorld = uModelMatrix * vec4(aNormalPosition, 0.0);
   vNormalWorld = normalize(normalWorld.xyz);
   vTextureCoord = aTextureCoord;
-  vWorldToLight = uLightVP;
+  fragPosLightSpace = uLightVP * posWorld;
 
   gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix * vec4(aVertexPosition, 1.0);
   vDepth = gl_Position.w;

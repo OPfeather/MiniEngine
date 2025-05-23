@@ -1,5 +1,10 @@
-uniform vec3 uLightDir;//定向光
+#ifdef DIRECTION_LIGHT
+uniform vec3 uLightDir;
+#endif
+
+#ifdef POINT_LIGHT
 uniform vec3 uLightPos;
+#endif
 uniform vec3 uCameraPos;
 uniform vec3 uLightRadiance;
 uniform sampler2D uGDiffuse;
@@ -217,7 +222,14 @@ vec3 EvalDiffuse(vec3 wi, vec3 wo, vec2 uv) {
  *
  */
 vec3 EvalDirectionalLight(vec2 uv) {
-  vec3 Le = GetGBufferuShadow(uv) * uLightRadiance ;
+  vec3 radiance = uLightRadiance;
+#ifdef POINT_LIGHT
+  vec3 worldPos = texture2D(uGPosWorld, uv).xyz;
+  float distance = length(uLightPos - worldPos);
+  float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 *distance * distance);
+  radiance = radiance * attenuation;
+#endif
+  vec3 Le = GetGBufferuShadow(uv) * radiance ;
   return Le;
 }
 
@@ -314,11 +326,6 @@ vec3 EvalBRDF(vec3 wi, vec3 wo, vec2 uv) {
   vec3 H = normalize(V + L);
   float NdotV = max(dot(N, V), 0.0);
 
-  //vec3 worldPos = texture2D(uGPosWorld, uv).xyz;
-  //float distance = length(uLightPos - worldPos);
-  //float attenuation = 1.0 / (distance * distance);
-  //vec3 radiance = uLightRadiance;
-
   float roughness = GetGBufferuRoughness(uv);
   float NDF = DistributionGGX(N, H, roughness);   
   float G   = GeometrySmith(N, V, L, roughness);
@@ -336,7 +343,7 @@ vec3 EvalBRDF(vec3 wi, vec3 wo, vec2 uv) {
     return F0; 
 }
 
-#define SAMPLE_NUM 10
+#define SAMPLE_NUM 1
 
 void main() {
   float s = InitRand(gl_FragCoord.xy);
@@ -345,7 +352,15 @@ void main() {
   vec3 Lo = vec3(0.0);
   vec3 worldPos = texture2D(uGPosWorld, vTexCoords).xyz;
   vec2 screenUV = GetScreenCoordinate(worldPos);
+
+#ifdef DIRECTION_LIGHT
   vec3 wi = normalize(uLightDir);
+#endif
+
+#ifdef POINT_LIGHT
+  vec3 wi = normalize(uLightPos - worldPos);
+#endif
+
   vec3 wo = normalize(uCameraPos - worldPos);
   vec3 normal = GetGBufferNormalWorld(vTexCoords);
   float roughness = GetGBufferuRoughness(vTexCoords);
@@ -402,7 +417,8 @@ void main() {
     L_ind /= float(SAMPLE_NUM);
 
     vec3 color = Lo + L_ind;
+    color = color / (color + vec3(1.0));
 
-  //vec3 color = pow(clamp(L, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
+  //color = pow(clamp(color, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
   FragColor = vec4(color, 1.0);
 }

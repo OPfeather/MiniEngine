@@ -11,7 +11,7 @@ uniform sampler2D uShadowMap;
 uniform float uMetallic;
 uniform float uRoughness;
 
-in mat4 vWorldToLight;
+in vec4 fragPosLightSpace;
 in vec2 vTextureCoord;
 in vec4 vPosWorld;
 in vec3 vNormalWorld;
@@ -24,10 +24,11 @@ layout(location = 3) out vec3 outVRM;
 layout(location = 4) out vec3 outWorldPos;
 
 float SimpleShadowMap(vec3 posWorld,float bias){
-  vec4 posLight = vWorldToLight * vec4(posWorld, 1.0);
+  vec3 posLight = fragPosLightSpace.xyz / fragPosLightSpace.w;
   vec2 shadowCoord = clamp(posLight.xy * 0.5 + 0.5, vec2(0.0), vec2(1.0));
   float depthSM = texture2D(uShadowMap, shadowCoord).x;
-  float depth = (posLight.z * 0.5 + 0.5);
+  float depth = posLight.z;
+  depth = (depth * 0.5 + 0.5);
   return step(0.0, depthSM - depth + bias);
 }
 

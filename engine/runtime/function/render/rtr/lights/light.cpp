@@ -199,7 +199,7 @@ namespace ff {
 	Light::Light(glm::vec3 lightPos) noexcept {
         mPos = lightPos;
         mViewMatrix = lookAtSafe(mPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        mPerspectiveMatrix = PerspectiveMatrix::create(0.1f, 100.0f, 1.0, 90.0f);
+        mPerspectiveMatrix = PerspectiveMatrix::create(1.0f, 100.0f, 1.0, 90.0f);
         mOrthographicMatrix = OrthographicMatrix::create(-100, 100, -100, 100, 1, 100);
 
         edgePos.push_back({ {-8.0f, 2.4f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} });
@@ -211,7 +211,7 @@ namespace ff {
     Light::Light() noexcept {
         mPos = glm::vec3(0.0, 0.0, 0.0);
         mViewMatrix = lookAtSafe(mPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        mPerspectiveMatrix = PerspectiveMatrix::create(0.1f, 100.0f, 1.0, 90.0f);
+        mPerspectiveMatrix = PerspectiveMatrix::create(1.0f, 100.0f, 1.0, 90.0f);
         mOrthographicMatrix = OrthographicMatrix::create(-100, 100, -100, 100, 1, 100);
 	}
 
@@ -244,7 +244,7 @@ namespace ff {
 
     glm::mat4 Light::getProjectionMatrix()
     {
-        if (mType == DIRECTION_LIGHT || AREA_LIGHT)
+        if (mType == DIRECTION_LIGHT || mType == AREA_LIGHT)
         {
             return mOrthographicMatrix->getProjectionMatrix();
         }
