@@ -181,7 +181,7 @@ namespace MiniEngine
         for (auto obj : m_rtr_secene->mOpaques)
         {
             ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-                obj->getMaterial(), obj, depth_shader_vs, depth_shader_fs);
+                obj->getMaterial(), obj, m_rtr_base_env.light->mType, depth_shader_vs, depth_shader_fs);
             HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             depth_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
             
@@ -216,7 +216,7 @@ namespace MiniEngine
         for (auto obj : m_rtr_secene->mOpaques)
         {
             ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-                obj->getMaterial(), obj, pcss_shader_vs, pcss_shader_fs);
+                obj->getMaterial(), obj, m_rtr_base_env.light->mType, pcss_shader_vs, pcss_shader_fs);
             HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             pcss_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
             
@@ -291,7 +291,7 @@ namespace MiniEngine
         for (auto obj : m_rtr_secene->mOpaques)
         {
             ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-                obj->getMaterial(), obj, depth_shader_vs, depth_shader_fs);
+                obj->getMaterial(), obj, m_rtr_base_env.light->mType, depth_shader_vs, depth_shader_fs);
             HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             depth_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -326,7 +326,7 @@ namespace MiniEngine
         for (auto obj : m_rtr_secene->mOpaques)
         {
             ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-                obj->getMaterial(), obj, gBuffer_shader_vs, gBuffer_shader_fs);
+                obj->getMaterial(), obj, m_rtr_base_env.light->mType, gBuffer_shader_vs, gBuffer_shader_fs);
             HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             gBuffer_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -399,7 +399,7 @@ namespace MiniEngine
         get_shader_code(ff::SsrShader, ssr_shader_vs, ssr_shader_fs);
 
         ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-            nullptr, nullptr, ssr_shader_vs, ssr_shader_fs);
+            nullptr, nullptr, m_rtr_base_env.light->mType, ssr_shader_vs, ssr_shader_fs);
         HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
         ssr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -452,7 +452,7 @@ namespace MiniEngine
         for (auto obj : m_rtr_secene->mOpaques)
         {
             ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-                obj->getMaterial(), obj, pbr_shader_vs, pbr_shader_fs);
+                obj->getMaterial(), obj, m_rtr_base_env.light->mType, pbr_shader_vs, pbr_shader_fs);
             HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             pbr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -532,13 +532,16 @@ namespace MiniEngine
         config_FBO(ff::DepthShader);
 
         m_rtr_base_env.light->updateViewMatrix();
+        //glm::mat4 mProjectionMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 1.0f, 25.0f);
+        //glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 1.0f, 100.0f);
+        //glm::mat4 lightView = glm::lookAt(m_rtr_base_env.lightPos, glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 lightSpaceMatrix = m_rtr_base_env.light->getProjectionMatrix() * m_rtr_base_env.light->getViewMatrix();
         // - now render scene from light's point of view
 
         for (auto obj : m_rtr_secene->mOpaques)
         {
             ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-                obj->getMaterial(), obj, depth_shader_vs, depth_shader_fs);
+                obj->getMaterial(), obj, m_rtr_base_env.light->mType, depth_shader_vs, depth_shader_fs);
             HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             depth_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -573,7 +576,7 @@ namespace MiniEngine
         for (auto obj : m_rtr_secene->mOpaques)
         {
             ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-                obj->getMaterial(), obj, gBuffer_shader_vs, gBuffer_shader_fs);
+                obj->getMaterial(), obj, m_rtr_base_env.light->mType, gBuffer_shader_vs, gBuffer_shader_fs);
             HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             gBuffer_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -657,7 +660,7 @@ namespace MiniEngine
         get_shader_code(ff::SsrShader, pbr_ssr_shader_vs, pbr_ssr_shader_fs);
 
         ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-            nullptr, nullptr, pbr_ssr_shader_vs, pbr_ssr_shader_fs);
+            nullptr, nullptr, m_rtr_base_env.light->mType, pbr_ssr_shader_vs, pbr_ssr_shader_fs);
         HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
         pbr_ssr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -666,10 +669,16 @@ namespace MiniEngine
         glm::mat4 view = m_render_camera->getViewMatrix();
         pbr_ssr_shader->setMat4("uProjectionMatrix", projection);
         pbr_ssr_shader->setMat4("uViewMatrix", view);
-        // Set light uniforms
-        pbr_ssr_shader->setVec3("uLightDir", m_rtr_base_env.lightPos);
         pbr_ssr_shader->setVec3("uCameraPos", m_render_camera->Position);
-        glm::vec3 lightRadiance(1.0, 1.0, 1.0);
+        // Set light uniforms
+        if (m_rtr_base_env.light->mType == ff::DIRECTION_LIGHT) {
+            pbr_ssr_shader->setVec3("uLightDir", m_rtr_base_env.lightPos);
+        }
+        else if(m_rtr_base_env.light->mType == ff::POINT_LIGHT)
+        {
+            pbr_ssr_shader->setVec3("uLightPos", m_rtr_base_env.lightPos);
+        }
+        glm::vec3 lightRadiance(20.0, 20.0, 20.0);
         pbr_ssr_shader->setVec3("uLightRadiance", lightRadiance);
 
         pbr_ssr_shader->setInt("uGDiffuse", 0);

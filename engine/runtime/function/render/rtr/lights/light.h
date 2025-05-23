@@ -62,7 +62,7 @@ namespace ff {
 
 	private:
 
-		float mFar{ 100.0f };
+		float mFar{ 20.0f };
 		float mNear{ 0.1f };
 		float mAspect{ 1.3f };
 		float mFov{ 45.0f };

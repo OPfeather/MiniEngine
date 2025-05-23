@@ -23,6 +23,23 @@ namespace ff {
 		prefixFragment.append(parameters->mHasEnvCubeMap ? "#define HAS_ENV_MAP\n" : "");
 		prefixFragment.append(parameters->mHasSpecularMap ? "#define HAS_SPECULAR_MAP\n" : "");
 		prefixFragment.append(parameters->mHasNormalMap ? "#define HAS_NORMAL_MAP\n" : "");
+		switch(parameters->mLightType){
+			case DIRECTION_LIGHT:
+				prefixFragment.append("#define DIRECTION_LIGHT\n");
+			break;
+			case POINT_LIGHT:
+				prefixFragment.append("#define POINT_LIGHT\n");
+			break;
+			case AREA_LIGHT:
+				prefixFragment.append("#define AREA_LIGHT\n");
+			break;
+			case IBL:
+				prefixFragment.append("#define IBL\n");
+			break;
+			default:
+				prefixFragment.append("#define DIRECTION_LIGHT\n");
+			break;
+		}
 
 
 		//4 从parameters里面取出来vs/fs基础功能代码
@@ -39,11 +56,11 @@ namespace ff {
 		auto vertex = vertexString.c_str();
 		auto fragment = fragmentString.c_str();
 
-		std::cout << vertex << std::endl;
-		std::cout << fragment << std::endl;
-		std::cout << "----------------------------------------------------" << std::endl;
-		std::cout << std::endl;
-		std::cout << std::endl;
+		//std::cout << vertex << std::endl;
+		//std::cout << fragment << std::endl;
+		//std::cout << "----------------------------------------------------" << std::endl;
+		//std::cout << std::endl;
+		//std::cout << std::endl;
 
 		//shader的编译与链接
 		uint32_t vertexID = 0, fragID = 0;
@@ -157,6 +174,7 @@ namespace ff {
 	DriverProgram::Parameters::Ptr DriverPrograms::getParameters(
 		const Material::Ptr& material,
 		const Object3D::Ptr& object,
+		LightType lightType,
 		std::string vsCode, std::string fsCode
 	) {
 		auto parameters = DriverProgram::Parameters::create();
@@ -165,6 +183,7 @@ namespace ff {
 		//shaderIter->second 即 shader struct object
 		parameters->mVertex = vsCode;
 		parameters->mFragment = fsCode;
+		parameters->mLightType = lightType;
 
 		if (material == nullptr || object == nullptr)
 		{
@@ -175,7 +194,6 @@ namespace ff {
 		auto geometry = renderObject->getGeometry();
 
 		//新建一个parameters
-		
 
 		if (geometry->hasAttribute("normal")) {
 			parameters->mHasNormal = true;
@@ -223,6 +241,7 @@ namespace ff {
 		keyString.append(std::to_string(parameters->mHasEnvCubeMap));
 		keyString.append(std::to_string(parameters->mHasSpecularMap));
 		keyString.append(std::to_string(parameters->mDepthPacking));
+		keyString.append(std::to_string(parameters->mLightType));
 
 		return hasher(keyString);
 	}
