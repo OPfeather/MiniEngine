@@ -2,6 +2,17 @@
 uniform vec3 uLightDir;
 #endif
 
+#ifdef AREA_LIGHT
+uniform vec3 uLightDir;
+uniform vec3 points[4];
+uniform sampler2D LTC1; // for inverse M
+uniform sampler2D LTC2; // GGX norm, fresnel, 0(unused), sphere
+
+const float LUT_SIZE  = 64.0; // ltc_texture size
+const float LUT_SCALE = (LUT_SIZE - 1.0)/LUT_SIZE;
+const float LUT_BIAS  = 0.5/LUT_SIZE;
+#endif
+
 #ifdef POINT_LIGHT
 uniform vec3 uLightPos;
 #endif
@@ -24,6 +35,102 @@ out vec4 FragColor;
 #define TWO_PI 6.283185307
 #define INV_PI 0.31830988618
 #define INV_TWO_PI 0.15915494309
+
+#ifdef AREA_LIGHT
+// Vector form without project to the plane (dot with the normal)
+// Use for proxy sphere clipping
+vec3 IntegrateEdgeVec(vec3 v1, vec3 v2)
+{
+    // Using built-in acos() function will result flaws
+    // Using fitting result for calculating acos()
+    float x = dot(v1, v2);
+    float y = abs(x);
+
+    float a = 0.8543985 + (0.4965155 + 0.0145206*y)*y;
+    float b = 3.4175940 + (4.1616724 + y)*y;
+    float v = a / b;
+
+    float theta_sintheta = (x > 0.0) ? v : 0.5*inversesqrt(max(1.0 - x*x, 1e-7)) - v;
+
+    return cross(v1, v2)*theta_sintheta;
+}
+
+float IntegrateEdge(vec3 v1, vec3 v2)
+{
+    return IntegrateEdgeVec(v1, v2).z;
+}
+
+// P is fragPos in world space (LTC distribution)
+vec3 LTC_Evaluate(vec3 N, vec3 V, vec3 P, mat3 Minv, vec3 points[4], bool twoSided)
+{
+    // construct orthonormal basis around N
+    vec3 T1, T2;
+    T1 = normalize(V - N * dot(V, N));
+    T2 = cross(N, T1);
+
+    // rotate area light in (T1, T2, N) basis
+    Minv = Minv * transpose(mat3(T1, T2, N));
+
+    // polygon (allocate 4 vertices for clipping)
+    vec3 L[4];
+    // transform polygon from LTC back to origin Do (cosine weighted)
+    L[0] = Minv * (points[0] - P);
+    L[1] = Minv * (points[1] - P);
+    L[2] = Minv * (points[2] - P);
+    L[3] = Minv * (points[3] - P);
+
+    // use tabulated horizon-clipped sphere
+    // check if the shading point is behind the light
+    vec3 dir = points[0] - P; // LTC space
+    vec3 lightNormal = cross(points[1] - points[0], points[3] - points[0]);
+    bool behind = (dot(dir, lightNormal) < 0.0);
+
+    // cos weighted space
+    L[0] = normalize(L[0]);
+    L[1] = normalize(L[1]);
+    L[2] = normalize(L[2]);
+    L[3] = normalize(L[3]);
+
+    // integrate
+    vec3 vsum = vec3(0.0);
+    vsum += IntegrateEdgeVec(L[0], L[1]);
+    vsum += IntegrateEdgeVec(L[1], L[2]);
+    vsum += IntegrateEdgeVec(L[2], L[3]);
+    vsum += IntegrateEdgeVec(L[3], L[0]);
+
+    // form factor of the polygon in direction vsum
+    float len = length(vsum);
+
+    float z = vsum.z/len;
+    if (behind)
+        z = -z;
+
+    vec2 uv = vec2(z*0.5f + 0.5f, len); // range [0, 1]
+    uv = uv*LUT_SCALE + LUT_BIAS;
+
+    // Fetch the form factor for horizon clipping
+    float scale = texture(LTC2, uv).w;
+
+    float sum = len*scale;
+    if (!behind && !twoSided)
+        sum = 0.0;
+
+    // Outgoing radiance (solid angle) for the entire polygon
+    vec3 Lo_i = vec3(sum, sum, sum);
+    return Lo_i;
+}
+
+// PBR-maps for roughness (and metallic) are usually stored in non-linear
+// color space (sRGB), so we use these functions to convert into linear RGB.
+vec3 PowVec3(vec3 v, float p)
+{
+    return vec3(pow(v.x, p), pow(v.y, p), pow(v.z, p));
+}
+
+const float gamma = 2.2;
+vec3 ToLinear(vec3 v) { return PowVec3(v, gamma); }
+vec3 ToSRGB(vec3 v)   { return PowVec3(v, 1.0/gamma); }
+#endif  //AREA_LIGHT
 
 float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
@@ -183,10 +290,10 @@ vec3 GetGBufferDiffuse(vec2 uv) {
   return diffuse;
 }
 
-vec3 MultiScatterBRDF(float NdotL, float NdotV)
+vec3 MultiScatterBRDF(float NdotL, float NdotV, vec2 uv)
 {
-  vec3 albedo = texture2D(uGDiffuse, vTexCoords).rgb;
-  float roughness = GetGBufferuRoughness(vTexCoords);
+  vec3 albedo = texture2D(uGDiffuse, uv).rgb;
+  float roughness = GetGBufferuRoughness(uv);
   vec3 E_o = texture2D(uBRDFLut, vec2(NdotL, roughness)).xyz;
   vec3 E_i = texture2D(uBRDFLut, vec2(NdotV, roughness)).xyz;//NdotV接近1的地方有亮斑
 
@@ -314,6 +421,50 @@ vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness)
 	return normalize(sampleVec);
 }
 
+#ifdef AREA_LIGHT
+vec3 EvalBRDF(vec3 wi, vec3 wo, vec2 uv){
+  vec3 albedo = GetGBufferDiffuse(uv).xyz;
+  vec3 F0 = vec3(0.04);
+  float metallic = GetGBufferuMetallic(uv);
+  F0 = mix(F0, albedo, metallic);
+  
+  vec3 result = vec3(0.0f);
+
+  vec3 N = GetGBufferNormalWorld(uv);
+  vec3 V = normalize(wo);
+  vec3 P = texture2D(uGPosWorld, uv).xyz;
+  float dotNV = clamp(dot(N, V), 0.0f, 1.0f);
+  float roughness = GetGBufferuRoughness(uv);
+
+  vec2 ltcUV = vec2(roughness, sqrt(1.0f - dotNV));
+  ltcUV = ltcUV*LUT_SCALE + LUT_BIAS;
+
+  // get 4 parameters for inverse_M
+  vec4 t1 = texture(LTC1, ltcUV);
+
+  // Get 2 parameters for Fresnel calculation
+  vec4 t2 = texture(LTC2, ltcUV);
+
+  mat3 Minv = mat3(
+      vec3(t1.x, 0, t1.y),
+      vec3(  0,  1,    0),
+      vec3(t1.z, 0, t1.w)
+  );
+
+  // Evaluate LTC shading
+  vec3 diffuse = LTC_Evaluate(N, V, P, mat3(1), points, false);
+  vec3 specular = LTC_Evaluate(N, V, P, Minv, points, false);
+
+  // GGX BRDF shadowing and Fresnel
+  // t2.x: shadowedF90 (F90 normally it should be 1.0)
+  // t2.y: Smith function for Geometric Attenuation Term, it is dot(V or L, H).
+  specular *= F0*t2.x + (1.0f - F0) * t2.y;
+
+  result = specular + diffuse * albedo;
+  return result;
+}
+
+#else
 vec3 EvalBRDF(vec3 wi, vec3 wo, vec2 uv) {
   vec3 F0 = vec3(0.04);
   vec3 albedo = GetGBufferDiffuse(uv).xyz;
@@ -337,11 +488,11 @@ vec3 EvalBRDF(vec3 wi, vec3 wo, vec2 uv) {
 
   float NdotL = max(dot(N, L), 0.0);        
 
-  vec3 Fms = MultiScatterBRDF(NdotL, NdotV);
+  vec3 Fms = MultiScatterBRDF(NdotL, NdotV, uv);
   vec3 BRDF = Fmicro + Fms;
   return BRDF * NdotL;
-    return F0; 
 }
+#endif //AREA_LIGHT
 
 #define SAMPLE_NUM 1
 
@@ -352,29 +503,26 @@ void main() {
   vec3 Lo = vec3(0.0);
   vec3 worldPos = texture2D(uGPosWorld, vTexCoords).xyz;
   vec2 screenUV = GetScreenCoordinate(worldPos);
-
-#ifdef DIRECTION_LIGHT
-  vec3 wi = normalize(uLightDir);
-#endif
-
-#ifdef POINT_LIGHT
-  vec3 wi = normalize(uLightPos - worldPos);
-#endif
-
   vec3 wo = normalize(uCameraPos - worldPos);
   vec3 normal = GetGBufferNormalWorld(vTexCoords);
   float roughness = GetGBufferuRoughness(vTexCoords);
 
-  //L = GetGBufferDiffuse(vTexCoords);
+#ifdef AREA_LIGHT
+  vec3 wi = normalize(uLightDir);
+#else
 
+#ifdef DIRECTION_LIGHT
+  vec3 wi = normalize(uLightDir);
+#endif //DIRECTION_LIGHT
+
+#ifdef POINT_LIGHT
+  vec3 wi = normalize(uLightPos - worldPos);
+#endif //POINT_LIGHT
+#endif //AREA_LIGHT
   vec3 BRDF = EvalBRDF(wi, wo, screenUV);
-
   // 直接光照
-  Lo = BRDF * uLightRadiance * EvalDirectionalLight(screenUV);
-  
-  // Screen Space Ray Tracing 的反射测试
-  //Lo = EvalReflect(wi, wo, screenUV);
-  //L = vec3(texture(uGPosWorld, screenUV).xyz);
+  Lo = BRDF * EvalDirectionalLight(screenUV);
+
 
   vec3 L_ind = vec3(0.0);
   for(int i = 0; i < SAMPLE_NUM; i++){

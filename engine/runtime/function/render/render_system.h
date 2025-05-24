@@ -52,7 +52,7 @@ namespace MiniEngine
     {
         public:
             ff::Light::Ptr light{ nullptr };
-            glm::vec3 lightPos{ 5,5,5 };
+            glm::vec3 lightPos{ -8,0,0 };
 
             bool isRenderFloor = false;
             glm::vec3 floorPos{ 0,-3,0 };
