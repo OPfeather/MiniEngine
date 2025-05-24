@@ -77,7 +77,6 @@ namespace ff {
 		}
 
 		Light(glm::vec3 lightPos) noexcept;
-		Light() noexcept;
 
 		~Light() noexcept;
 
@@ -87,10 +86,12 @@ namespace ff {
 		glm::mat4 getViewMatrix() noexcept { return mViewMatrix;}
 		glm::mat4 getProjectionMatrix();
 
+		GLuint loadMinvTexture();
+		GLuint loadFGTexture();
+
 	public:
 		glm::vec3	mColor = glm::vec3(1.0f);
 		float		mIntensity = 1.0f;
-		bool		mCastShadow{ false };//�Ƿ������Ӱ
 		glm::vec3	mPos = glm::vec3(0.0f);
 		//LightShadow::Ptr	mShadow{ nullptr };
 		glm::mat4 mViewMatrix = glm::mat4(1.0f);
@@ -103,8 +104,12 @@ namespace ff {
 		unsigned int sphereLightVAO = 0;
 		unsigned int lightIndexCount = 0;
 
+		//面光源
 		unsigned int areaLightVAO = 0;
 		glm::vec3 rotation = glm::vec3(0.0f);
 		std::vector<VertexAL> edgePos;
+
+		GLuint M_INV = 0;  //M的逆矩阵
+		GLuint FG = 0;     //GGX BRDF shadowing and Fresnel
 	};
 }

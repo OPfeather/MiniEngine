@@ -1,4 +1,5 @@
 #include "light.h"
+#include "ltc_matrix.h"
 
 namespace ff {
     // �ж����������Ƿ���ƹ���
@@ -202,23 +203,30 @@ namespace ff {
         mPerspectiveMatrix = PerspectiveMatrix::create(1.0f, 100.0f, 1.0, 90.0f);
         mOrthographicMatrix = OrthographicMatrix::create(-100, 100, -100, 100, 1, 100);
 
-        edgePos.push_back({ {-8.0f, 2.4f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} });
-        edgePos.push_back({ {-8.0f, 2.4f,  1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f} });
-        edgePos.push_back({ {-8.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f} });
-        edgePos.push_back({ {-8.0f, 0.0f,  1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f} });
-	}
-
-    Light::Light() noexcept {
-        mPos = glm::vec3(0.0, 0.0, 0.0);
-        mViewMatrix = lookAtSafe(mPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        mPerspectiveMatrix = PerspectiveMatrix::create(1.0f, 100.0f, 1.0, 90.0f);
-        mOrthographicMatrix = OrthographicMatrix::create(-100, 100, -100, 100, 1, 100);
+        //垂直于世界坐标x轴高为4，宽为4的正方形光源，法线指向x轴正方向
+        edgePos.push_back({ {0, 5, -2.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} });//右上
+        edgePos.push_back({ {0, 5,  2.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f} });//左上
+        edgePos.push_back({ {0, 0, -2.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f} });//右下
+        edgePos.push_back({ {0, 0,  2.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f} });//左下
 	}
 
 	Light::~Light() noexcept {}
 
     void Light::updateViewMatrix() noexcept {
-        mViewMatrix = lookAtSafe(mPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::vec3 direction = glm::vec3(0.0f, 0.0f, 0.0f);
+        if (mType == AREA_LIGHT)
+        {
+            glm::mat4 model = glm::mat4(1.0f);
+            glm::vec3& lightRot = rotation;
+            glm::quat quatX = glm::angleAxis(lightRot.x, glm::vec3(1.0f, 0.0f, 0.0f));
+            glm::quat quatY = glm::angleAxis(lightRot.y, glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::quat quatZ = glm::angleAxis(lightRot.z, glm::vec3(0.0f, 0.0f, 1.0f));
+            glm::quat finalQuat = quatX * quatY * quatZ; // 顺序敏感
+            glm::mat4 rotationMatrix = glm::mat4_cast(finalQuat);
+            direction = rotationMatrix * glm::vec4(edgePos[0].normal, 0);
+            direction = mPos + direction;
+        }
+        mViewMatrix = lookAtSafe(mPos, direction, glm::vec3(0.0f, 1.0f, 0.0f));
     }
 
     void Light::updatePosition(glm::vec3 pos) noexcept {
@@ -252,5 +260,46 @@ namespace ff {
         {
             return mPerspectiveMatrix->getProjectionMatrix();
         }
+    }
+
+    GLuint Light::loadMinvTexture()
+    {
+        if (M_INV == 0)
+        {
+            glGenTextures(1, &M_INV);
+            glBindTexture(GL_TEXTURE_2D, M_INV);
+
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 64, 64,
+                0, GL_RGBA, GL_FLOAT, LTC1);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+        
+        return M_INV;
+    }
+
+    GLuint Light::loadFGTexture()
+    {
+        if (FG == 0)
+        {
+            glGenTextures(1, &FG);
+            glBindTexture(GL_TEXTURE_2D, FG);
+
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 64, 64,
+                0, GL_RGBA, GL_FLOAT, LTC2);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+        return FG;
     }
 }

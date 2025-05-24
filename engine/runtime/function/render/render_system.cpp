@@ -31,7 +31,7 @@ namespace MiniEngine
         ASSERT(asset_manager);
 
         // configure global opengl state
-        glEnable(GL_CULL_FACE);
+        //glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
         //glEnable(GL_MULTISAMPLE);
         //glEnable(GL_FRAMEBUFFER_SRGB);
@@ -101,7 +101,6 @@ namespace MiniEngine
 
     void RenderSystem::rtr_light_model()
     {
-        //TODO:根据光源类型绘制灯光模型
         std::shared_ptr<ConfigManager> config_manager = g_runtime_global_context.m_config_manager;
         ASSERT(config_manager);
         //绘制球形灯源
@@ -112,7 +111,14 @@ namespace MiniEngine
         glm::mat4 projection = m_render_camera->getPersProjMatrix();
         glm::mat4 view = m_render_camera->getViewMatrix();
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, m_rtr_base_env.lightPos);
+        glm::vec3& lightRot = m_rtr_base_env.light->rotation;
+        glm::quat quatX = glm::angleAxis(lightRot.x, glm::vec3(1.0f, 0.0f, 0.0f));
+        glm::quat quatY = glm::angleAxis(lightRot.y, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::quat quatZ = glm::angleAxis(lightRot.z, glm::vec3(0.0f, 0.0f, 1.0f));
+        glm::quat finalQuat = quatX * quatY * quatZ; // 顺序敏感
+        glm::mat4 rotationMatrix = glm::mat4_cast(finalQuat);
+        glm::mat4 translateMatrix = glm::translate(glm::mat4(1.0f), m_rtr_base_env.lightPos);
+        model = translateMatrix * rotationMatrix;
         m_rtr_light_shader->setMat4("projection", projection);
         m_rtr_light_shader->setMat4("view", view);
         m_rtr_light_shader->setMat4("model", model);
@@ -532,9 +538,6 @@ namespace MiniEngine
         config_FBO(ff::DepthShader);
 
         m_rtr_base_env.light->updateViewMatrix();
-        //glm::mat4 mProjectionMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 1.0f, 25.0f);
-        //glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), 1.0f, 1.0f, 100.0f);
-        //glm::mat4 lightView = glm::lookAt(m_rtr_base_env.lightPos, glm::vec3(0.0, 0.0, 0.0), glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 lightSpaceMatrix = m_rtr_base_env.light->getProjectionMatrix() * m_rtr_base_env.light->getViewMatrix();
         // - now render scene from light's point of view
 
@@ -621,6 +624,10 @@ namespace MiniEngine
                 glBindTexture(GL_TEXTURE_2D, obj->getMaterial()->mNormalMap->mGlTexture);
             }
 
+            if (m_rtr_base_env.light->mType == ff::AREA_LIGHT) {
+                gBuffer_shader->setVec3("uLightPos", m_rtr_base_env.lightPos);
+            }
+
             gBuffer_shader->setInt("uShadowMap", 2);
             glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, depthMap);
@@ -678,7 +685,35 @@ namespace MiniEngine
         {
             pbr_ssr_shader->setVec3("uLightPos", m_rtr_base_env.lightPos);
         }
-        glm::vec3 lightRadiance(20.0, 20.0, 20.0);
+        else if (m_rtr_base_env.light->mType == ff::AREA_LIGHT)
+        {
+            glm::mat4 model = glm::mat4(1.0f);
+            glm::vec3& lightRot = m_rtr_base_env.light->rotation;
+            glm::quat quatX = glm::angleAxis(lightRot.x, glm::vec3(1.0f, 0.0f, 0.0f));
+            glm::quat quatY = glm::angleAxis(lightRot.y, glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::quat quatZ = glm::angleAxis(lightRot.z, glm::vec3(0.0f, 0.0f, 1.0f));
+            glm::quat finalQuat = quatX * quatY * quatZ; // 顺序敏感
+            glm::mat4 rotationMatrix = glm::mat4_cast(finalQuat);
+            glm::mat4 translateMatrix = glm::translate(glm::mat4(1.0f), m_rtr_base_env.lightPos);
+            model = translateMatrix * rotationMatrix;
+            glm::vec3 lightPointPos[4];
+            lightPointPos[0] = model * glm::vec4(m_rtr_base_env.light->edgePos[0].position, 1.0);
+            lightPointPos[1] = model * glm::vec4(m_rtr_base_env.light->edgePos[1].position, 1.0);
+            lightPointPos[2] = model * glm::vec4(m_rtr_base_env.light->edgePos[2].position, 1.0);
+            lightPointPos[3] = model * glm::vec4(m_rtr_base_env.light->edgePos[3].position, 1.0);
+            pbr_ssr_shader->setVec3("points[0]", lightPointPos[0]);
+            pbr_ssr_shader->setVec3("points[1]", lightPointPos[1]);
+            pbr_ssr_shader->setVec3("points[2]", lightPointPos[3]);  //按顺时针顺序传入
+            pbr_ssr_shader->setVec3("points[3]", lightPointPos[2]);
+
+            pbr_ssr_shader->setInt("LTC1", 7);
+            glActiveTexture(GL_TEXTURE7);
+            glBindTexture(GL_TEXTURE_2D, m_rtr_base_env.light->M_INV);
+            pbr_ssr_shader->setInt("LTC2", 8);
+            glActiveTexture(GL_TEXTURE8);
+            glBindTexture(GL_TEXTURE_2D, m_rtr_base_env.light->FG);
+        }
+        glm::vec3 lightRadiance = m_rtr_base_env.light->mColor * m_rtr_base_env.light->mIntensity;
         pbr_ssr_shader->setVec3("uLightRadiance", lightRadiance);
 
         pbr_ssr_shader->setInt("uGDiffuse", 0);

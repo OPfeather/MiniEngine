@@ -646,6 +646,8 @@ namespace MiniEngine
             static int currentItem = 0;
             static int previousItem = -1;  // 保存上一次选择的值
             glm::vec3& lightPos = g_runtime_global_context.m_render_system->m_rtr_base_env.lightPos;
+            glm::vec3& lightRot = g_runtime_global_context.m_render_system->m_rtr_base_env.light->rotation;
+            float& intensity = g_runtime_global_context.m_render_system->m_rtr_base_env.light->mIntensity;
             if (ImGui::Combo("Type", &currentItem, items, IM_ARRAYSIZE(items)))
             {
                 if (currentItem != previousItem)
@@ -663,6 +665,8 @@ namespace MiniEngine
                         break;
                     case 2:
                         g_runtime_global_context.m_render_system->m_rtr_base_env.light->mType = ff::AREA_LIGHT;
+                        g_runtime_global_context.m_render_system->m_rtr_base_env.light->loadMinvTexture();
+                        g_runtime_global_context.m_render_system->m_rtr_base_env.light->loadFGTexture();
                         break;
                     case 3:
                         g_runtime_global_context.m_render_system->m_rtr_base_env.light->mType = ff::IBL;
@@ -680,6 +684,13 @@ namespace MiniEngine
                 g_runtime_global_context.m_render_system->m_rtr_base_env.light->updatePosition(lightPos);
                 g_runtime_global_context.m_render_system->m_rtr_base_env.light->updateViewMatrix();
             }
+            ImGui::Text("Rotation");
+            
+            //ImGui::DragFloat("Pitch", &lightRot.x, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragFloat("Yaw", &lightRot.y, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragFloat("Roll", &lightRot.z, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+
+            ImGui::DragFloat("mIntensity", &intensity, 0.01f, 1, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
             
 
             ImGui::TreePop();
