@@ -529,9 +529,14 @@ namespace MiniEngine
         std::string gBuffer_shader_fs;
         std::string pbr_ssr_shader_vs;
         std::string pbr_ssr_shader_fs;
+        std::string post_process_shader_vs;
+        std::string post_process_shader_fs;
         ff::DriverProgram::Ptr depth_shader = nullptr;
         ff::DriverProgram::Ptr gBuffer_shader = nullptr;
         ff::DriverProgram::Ptr pbr_ssr_shader = nullptr;
+        ff::DriverProgram::Ptr post_process_shader = nullptr;
+        ff::DriverProgram::Parameters::Ptr para = nullptr;
+        HashType cacheKey = 0;
 
         //psaa1:渲染深度
         get_shader_code(ff::DepthShader, depth_shader_vs, depth_shader_fs);
@@ -543,9 +548,9 @@ namespace MiniEngine
 
         for (auto obj : m_rtr_secene->mOpaques)
         {
-            ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
+            para = m_rtr_shader_programs->getParameters(
                 obj->getMaterial(), obj, m_rtr_base_env.light->mType, depth_shader_vs, depth_shader_fs);
-            HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+            cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             depth_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
             depth_shader->use();
@@ -578,9 +583,9 @@ namespace MiniEngine
 
         for (auto obj : m_rtr_secene->mOpaques)
         {
-            ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
+            para = m_rtr_shader_programs->getParameters(
                 obj->getMaterial(), obj, m_rtr_base_env.light->mType, gBuffer_shader_vs, gBuffer_shader_fs, mDenoise, mTaa);
-            HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+            cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             gBuffer_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
             gBuffer_shader->use();
@@ -666,29 +671,21 @@ namespace MiniEngine
         }
 
         //pass3:屏幕空间光追
-        //模板测试在片段着色器前进行，这里将gbuffer的模板复制过来，进行模板测试，避免渲染空白区域光照
-        
-        //refreshFrameBuffer();
-        // draw models in the scene
-        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-        glViewport(0, 0, m_viewport.width, m_viewport.height);
-        //glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-        glDisable(GL_DEPTH_TEST);
+        config_FBO(ff::SsrShader);
         glEnable(GL_STENCIL_TEST);
         glStencilFunc(GL_EQUAL, 1, 0xFF);
-
+        //模板测试在片段着色器前进行，这里将gbuffer的模板复制过来，进行模板测试，避免渲染空白区域光照
         glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, curFramebuffer);
         glBlitFramebuffer(0, 0, m_viewport.width, m_viewport.height,
             0, 0, m_viewport.width, m_viewport.height,
             GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
 
         get_shader_code(ff::SsrShader, pbr_ssr_shader_vs, pbr_ssr_shader_fs);
 
-        ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
+        para = m_rtr_shader_programs->getParameters(
             nullptr, nullptr, m_rtr_base_env.light->mType, pbr_ssr_shader_vs, pbr_ssr_shader_fs, mDenoise, mTaa);
-        HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+        cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
         pbr_ssr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
         pbr_ssr_shader->use();
@@ -697,20 +694,17 @@ namespace MiniEngine
         pbr_ssr_shader->setMat4("uProjectionMatrix", projection);
         pbr_ssr_shader->setMat4("uViewMatrix", view);
         pbr_ssr_shader->setVec3("uCameraPos", m_render_camera->Position);
-        if (mTaa)
+        if (mDenoise)
         {
-            pbr_ssr_shader->setInt("uFrameCount", frameCount);
-            pbr_ssr_shader->setFloat("uScreenWidth", m_viewport.width);
-            pbr_ssr_shader->setFloat("uScreenHeight", m_viewport.height);
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dist(0, 1023);
 
-            pbr_ssr_shader->setInt("uPreviousColor", 9);
-            glActiveTexture(GL_TEXTURE9);
-            glBindTexture(GL_TEXTURE_2D, previousColor);
+            int random1 = dist(gen);
 
-            pbr_ssr_shader->setInt("uVelocityMap", 10);
-            glActiveTexture(GL_TEXTURE10);
-            glBindTexture(GL_TEXTURE_2D, ssVelocityMap);
+            pbr_ssr_shader->setInt("uRandom", random1);
         }
+        
         // Set light uniforms
         if (m_rtr_base_env.light->mType == ff::DIRECTION_LIGHT) {
             pbr_ssr_shader->setVec3("uLightDir", m_rtr_base_env.lightPos);
@@ -773,17 +767,47 @@ namespace MiniEngine
         glActiveTexture(GL_TEXTURE6);
         glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mEavgLut->mGlTexture);
 
-        if (mDenoise)
-        {
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<> dist(0, 1023);
+        renderQuad();
 
-            int random1 = dist(gen);
-
-            pbr_ssr_shader->setInt("uRandom", random1);
-        }
         
+        // draw models in the scene
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glViewport(0, 0, m_viewport.width, m_viewport.height);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glDisable(GL_STENCIL_TEST);
+        glDisable(GL_DEPTH_TEST);
+
+        get_shader_code(ff::PostProcessShader, post_process_shader_vs, post_process_shader_fs);
+
+        para = m_rtr_shader_programs->getParameters(
+            nullptr, nullptr, m_rtr_base_env.light->mType, post_process_shader_vs, post_process_shader_fs, mDenoise, mTaa);
+        cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+        post_process_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
+
+        post_process_shader->use();
+
+        post_process_shader->setInt("uCurrentColor", 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, curColor);
+
+        if (mTaa)
+        {
+            post_process_shader->setInt("uFrameCount", frameCount);
+            post_process_shader->setFloat("uScreenWidth", m_viewport.width);
+            post_process_shader->setFloat("uScreenHeight", m_viewport.height);
+
+            post_process_shader->setInt("uPreviousColor", 1);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, previousColor);
+
+            post_process_shader->setInt("uVelocityMap", 2);
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, ssVelocityMap);
+
+            post_process_shader->setInt("ucCurrentDepth", 3);
+            glActiveTexture(GL_TEXTURE3);
+            glBindTexture(GL_TEXTURE_2D, ssDepthMap);
+        }
         renderQuad();
 
         if (mTaa)
@@ -803,7 +827,6 @@ namespace MiniEngine
             );
         }
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-        glDisable(GL_STENCIL_TEST);
         glEnable(GL_DEPTH_TEST);
     }
 
@@ -1098,6 +1121,11 @@ namespace MiniEngine
             vertexPath = (config_manager->getShaderFolder() / "brdf.vs").generic_string();
             fragmentPath = (config_manager->getShaderFolder() / "brdf.fs").generic_string();
             break;
+
+        case ff::PostProcessShader:
+            vertexPath = (config_manager->getShaderFolder() / "post_process.vs").generic_string();
+            fragmentPath = (config_manager->getShaderFolder() / "post_process.fs").generic_string();
+            break;
        
        default:
            vertexPath = (config_manager->getShaderFolder() / "lit.vs").generic_string();
@@ -1169,6 +1197,15 @@ namespace MiniEngine
                 glDeleteTextures(1, &previousColor);
                 preFramebuffer = 0;
                 previousColor = 0;
+            }
+            if (curFramebuffer != 0)
+            {
+                glDeleteFramebuffers(1, &curFramebuffer);
+                glDeleteTextures(1, &curColor);
+                glDeleteRenderbuffers(1, &curDepthBuffer);
+                curFramebuffer = 0;
+                curColor = 0;
+                curDepthBuffer = 0;
             }
             frameCount = 0;
             updateFBO = false;
@@ -1301,6 +1338,40 @@ namespace MiniEngine
                 }
                 glViewport(0, 0, m_viewport.width, m_viewport.height);
                 glBindFramebuffer(GL_FRAMEBUFFER, gBufferFBO);
+                //glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+                break;
+            case ff::SsrShader:
+                if (curFramebuffer == 0)
+                {
+                    // 创建帧缓冲
+                    glGenFramebuffers(1, &curFramebuffer);
+                    glBindFramebuffer(GL_FRAMEBUFFER, curFramebuffer);
+
+                    // 颜色纹理
+                    glGenTextures(1, &curColor);
+                    glBindTexture(GL_TEXTURE_2D, curColor);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_FLOAT, NULL);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, curColor, 0);
+
+                    //用于进行模板测试
+                    glGenRenderbuffers(1, &curDepthBuffer);
+                    glBindRenderbuffer(GL_RENDERBUFFER, curDepthBuffer);
+                    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_viewport.width, m_viewport.height);
+                    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+                    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, curDepthBuffer);
+
+                    // 检查帧缓冲完整性
+                    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                        std::cerr << "Current Framebuffer not complete!" << std::endl;
+                    }
+
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                }
+                glViewport(0, 0, m_viewport.width, m_viewport.height);
+                glBindFramebuffer(GL_FRAMEBUFFER, curFramebuffer);
                 //glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
                 break;

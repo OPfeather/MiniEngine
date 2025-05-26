@@ -133,6 +133,7 @@ namespace MiniEngine
     public:
         ff::Scene::Ptr m_rtr_secene{ nullptr };
 
+        //所有自定义的绘制都要渲染到该fbo上，最终才会显示到屏幕上
         unsigned int texColorBuffer, texDepthBuffer, framebuffer= 0;
 
         unsigned int flooreVAO, floorIndexCount = 0;
@@ -156,6 +157,9 @@ namespace MiniEngine
 
         unsigned int preFramebuffer = 0;
         GLuint previousColor = 0;
+        unsigned int curFramebuffer = 0;
+        GLuint curColor = 0;
+        GLuint curDepthBuffer = 0;
         
         BaseRenderEnviroment m_rtr_base_env;
 
