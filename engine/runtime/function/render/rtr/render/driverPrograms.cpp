@@ -6,7 +6,7 @@ namespace ff {
 	//2 占位字符串的替换,比如POSITION_LOCATION占位字符串替换为0
 	DriverProgram::DriverProgram(const Parameters::Ptr& parameters) noexcept {
 		//1 shader版本字符串
-		std::string versionString = "#version 330 core\n";
+		std::string versionString = "#version 450 core\n";
 
 		//3 prefix字符串，define的各类操作都会加入到prefix当中，从而决定后续代码当中哪些功能可以被打开
 		std::string prefixVertex;
@@ -15,6 +15,8 @@ namespace ff {
 		prefixVertex.append(parameters->mHasNormal ? "#define HAS_NORMAL\n" : "");
 		prefixVertex.append(parameters->mHasUV ? "#define HAS_UV\n" : "");
 		prefixVertex.append(parameters->mHasColor ? "#define HAS_COLOR\n" : "");
+		prefixVertex.append(parameters->mDenoise ? "#define DENOISE\n" : "");
+		prefixVertex.append(parameters->mTaa ? "#define TAA\n" : "");
 
 		prefixFragment.append(parameters->mHasNormal ? "#define HAS_NORMAL\n" : "");
 		prefixFragment.append(parameters->mHasUV ? "#define HAS_UV\n" : "");
@@ -23,6 +25,8 @@ namespace ff {
 		prefixFragment.append(parameters->mHasEnvCubeMap ? "#define HAS_ENV_MAP\n" : "");
 		prefixFragment.append(parameters->mHasSpecularMap ? "#define HAS_SPECULAR_MAP\n" : "");
 		prefixFragment.append(parameters->mHasNormalMap ? "#define HAS_NORMAL_MAP\n" : "");
+		prefixFragment.append(parameters->mDenoise ? "#define DENOISE\n" : "");
+		prefixFragment.append(parameters->mTaa ? "#define TAA\n" : "");
 		switch(parameters->mLightType){
 			case DIRECTION_LIGHT:
 				prefixFragment.append("#define DIRECTION_LIGHT\n");
@@ -175,7 +179,8 @@ namespace ff {
 		const Material::Ptr& material,
 		const Object3D::Ptr& object,
 		LightType lightType,
-		std::string vsCode, std::string fsCode
+		std::string vsCode, std::string fsCode,
+		bool denoise, bool taa
 	) {
 		auto parameters = DriverProgram::Parameters::create();
 
@@ -184,6 +189,8 @@ namespace ff {
 		parameters->mVertex = vsCode;
 		parameters->mFragment = fsCode;
 		parameters->mLightType = lightType;
+		parameters->mDenoise = denoise;
+		parameters->mTaa = taa;
 
 		if (material == nullptr || object == nullptr)
 		{
@@ -242,6 +249,8 @@ namespace ff {
 		keyString.append(std::to_string(parameters->mHasSpecularMap));
 		keyString.append(std::to_string(parameters->mDepthPacking));
 		keyString.append(std::to_string(parameters->mLightType));
+		keyString.append(std::to_string(parameters->mDenoise));
+		keyString.append(std::to_string(parameters->mTaa));
 
 		return hasher(keyString);
 	}

@@ -199,6 +199,10 @@ namespace ff {
 		return mWorldMatrix;
 	}
 
+	void Object3D::updatePreWorldMatrix() noexcept {
+		mPreWorldMatrix = mWorldMatrix;
+	}
+
 	//´«ÈëÉãÏñ»úviewMatrix
 	glm::mat4 Object3D::updateModelViewMatrix(const glm::mat4& viewMatrix) noexcept {
 		mModelViewMatrix = viewMatrix * mWorldMatrix;
@@ -243,6 +247,10 @@ namespace ff {
 
 	glm::mat4 Object3D::getWorldMatrix() noexcept {
 		return mWorldMatrix;
+	}
+
+	glm::mat4 Object3D::getPreWorldMatrix() noexcept {
+		return mPreWorldMatrix;
 	}
 
 	glm::mat4 Object3D::getModelViewMatrix() noexcept {

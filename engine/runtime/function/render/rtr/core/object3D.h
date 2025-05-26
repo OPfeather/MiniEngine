@@ -75,6 +75,8 @@ namespace ff {
 
 		virtual glm::mat4 updateWorldMatrix(bool updateParent = false, bool updateChildren = false) noexcept;
 
+		void updatePreWorldMatrix() noexcept;//暂不考虑骨骼动画的影响
+
 		glm::mat4 updateModelViewMatrix(const glm::mat4& viewMatrix) noexcept;
 
 		glm::mat3 updateNormalMatrix() noexcept;
@@ -94,6 +96,8 @@ namespace ff {
 		glm::mat4 getLocalMatrix() noexcept;
 
 		glm::mat4 getWorldMatrix() noexcept;
+
+		glm::mat4 getPreWorldMatrix() noexcept;
 
 		glm::mat4 getModelViewMatrix() noexcept;
 
@@ -136,6 +140,9 @@ namespace ff {
 
 		//worldMatrix将模型顶点从模型坐标系，转换到世界坐标系
 		glm::mat4	mWorldMatrix = glm::mat4(1.0f);
+
+		//前一帧的model矩阵
+		glm::mat4	mPreWorldMatrix = glm::mat4(1.0f);
 
 		//保留参数
 		bool		mNeedsUpdate{ false };

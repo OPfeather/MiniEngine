@@ -52,7 +52,7 @@ namespace MiniEngine
     {
         public:
             ff::Light::Ptr light{ nullptr };
-            glm::vec3 lightPos{ -8,0,0 };
+            glm::vec3 lightPos{ 5,3,-5 };
 
             bool isRenderFloor = false;
             glm::vec3 floorPos{ 0,-3,0 };
@@ -151,11 +151,20 @@ namespace MiniEngine
         GLuint ssNormalMap = 0;
         GLuint ssVRM = 0;   //存储可见性、粗糙度和金属度
         GLuint ssWorldPosMap = 0;
+        GLuint ssVelocityMap = 0;  //存储motion vector
         GLuint gBufferRboDepth = 0; //帧缓冲对象必须有深度附件，否则不会进行深度测试
+
+        unsigned int preFramebuffer = 0;
+        GLuint previousColor = 0;
         
         BaseRenderEnviroment m_rtr_base_env;
 
-        bool updateFBO = false;  //修改窗口大小时，需要修改FBO里的分辨率
+        bool mDenoise = false;
+        bool mTaa = false;
+
+        bool updateFBO = false;  //修改窗口大小、切换材质、抗锯齿或者降噪时需要更新
+
+        int frameCount = 0;  //当前是第几帧，从加载物体开始计算，重新加载物体或者updateFBO=true时清零
     };
 
     

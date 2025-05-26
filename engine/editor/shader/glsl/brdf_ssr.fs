@@ -1,6 +1,6 @@
 #ifdef DIRECTION_LIGHT
 uniform vec3 uLightDir;
-#endif
+#endif //DIRECTION_LIGHT
 
 #ifdef AREA_LIGHT
 uniform vec3 uLightDir;
@@ -11,11 +11,11 @@ uniform sampler2D LTC2; // GGX norm, fresnel, 0(unused), sphere
 const float LUT_SIZE  = 64.0; // ltc_texture size
 const float LUT_SCALE = (LUT_SIZE - 1.0)/LUT_SIZE;
 const float LUT_BIAS  = 0.5/LUT_SIZE;
-#endif
+#endif //AREA_LIGHT
 
 #ifdef POINT_LIGHT
 uniform vec3 uLightPos;
-#endif
+#endif //POINT_LIGHT
 uniform vec3 uCameraPos;
 uniform vec3 uLightRadiance;
 uniform sampler2D uGDiffuse;
@@ -25,6 +25,19 @@ uniform sampler2D uGVRM;
 uniform sampler2D uGPosWorld;
 uniform sampler2D uBRDFLut;
 uniform sampler2D uEavgLut;
+
+#ifdef DENOISE
+uniform int uRandom;
+#endif //DENOISE
+
+#ifdef TAA
+uniform sampler2D uPreviousColor;
+uniform sampler2D uVelocityMap;
+
+uniform float uScreenWidth;
+uniform float uScreenHeight;
+uniform int uFrameCount;
+#endif //TAA
 
 in mat4 vWorldToScreen;
 in vec2 vTexCoords;
@@ -286,7 +299,7 @@ float GetGBufferuMetallic(vec2 uv) {
 
 vec3 GetGBufferDiffuse(vec2 uv) {
   vec3 diffuse = texture2D(uGDiffuse, uv).xyz;
-  diffuse = pow(diffuse, vec3(2.2));
+  //diffuse = pow(diffuse, vec3(2.2));
   return diffuse;
 }
 
@@ -494,6 +507,129 @@ vec3 EvalBRDF(vec3 wi, vec3 wo, vec2 uv) {
 }
 #endif //AREA_LIGHT
 
+#ifdef TAA
+vec3 RGB2YCoCgR(vec3 rgbColor)
+{
+    vec3 YCoCgRColor;
+
+    YCoCgRColor.y = rgbColor.r - rgbColor.b;
+    float temp = rgbColor.b + YCoCgRColor.y / 2;
+    YCoCgRColor.z = rgbColor.g - temp;
+    YCoCgRColor.x = temp + YCoCgRColor.z / 2;
+
+    return YCoCgRColor;
+}
+
+vec3 YCoCgR2RGB(vec3 YCoCgRColor)
+{
+    vec3 rgbColor;
+
+    float temp = YCoCgRColor.x - YCoCgRColor.z / 2;
+    rgbColor.g = YCoCgRColor.z + temp;
+    rgbColor.b = temp - YCoCgRColor.y / 2;
+    rgbColor.r = rgbColor.b + YCoCgRColor.y;
+
+    return rgbColor;
+}
+
+float Luminance(vec3 color)
+{
+    return 0.25 * color.r + 0.5 * color.g + 0.25 * color.b;
+}
+
+vec3 ToneMap(vec3 color)
+{
+    return color / (1 + Luminance(color));
+}
+
+vec3 UnToneMap(vec3 color)
+{
+    return color / (1 - Luminance(color));
+}
+
+vec2 getClosestOffset()
+{
+    vec2 deltaRes = vec2(1.0 / uScreenWidth, 1.0 / uScreenHeight);
+    float closestDepth = 1000.0f;
+    vec2 closestUV = vTexCoords;
+
+    for(int i=-1;i<=1;++i)
+    {
+        for(int j=-1;j<=1;++j)
+        {
+            vec2 newUV = vTexCoords + deltaRes * vec2(i, j);
+
+            float depth = GetGBufferDepth(newUV);
+
+            if(depth < closestDepth)
+            {
+                closestDepth = depth;
+                closestUV = newUV;
+            }
+        }
+    }
+
+    return closestUV;
+}
+
+vec3 clipAABB(vec3 nowColor, vec3 preColor)
+{
+    vec3 aabbMin = nowColor, aabbMax = nowColor;
+    vec2 deltaRes = vec2(1.0 / uScreenWidth, 1.0 / uScreenHeight);
+    vec3 m1 = vec3(0), m2 = vec3(0);
+
+    for(int i=-1;i<=1;++i)
+    {
+        for(int j=-1;j<=1;++j)
+        {
+            vec2 newUV = vTexCoords + deltaRes * vec2(i, j);
+            vec3 worldPos = texture2D(uGPosWorld, newUV).xyz;
+            vec3 wo = normalize(uCameraPos - worldPos);
+#ifdef AREA_LIGHT
+            vec3 wi = normalize(uLightDir);
+#endif //AREA_LIGHT
+
+#ifdef DIRECTION_LIGHT
+            vec3 wi = normalize(uLightDir);
+#endif //DIRECTION_LIGHT
+
+#ifdef POINT_LIGHT          
+            vec3 wi = normalize(uLightPos - worldPos);
+#endif //POINT_LIGHT
+            //vec3 C = RGB2YCoCgR(ToneMap(GetGBufferDiffuse(newUV).rgb));
+            vec3 C = EvalBRDF(wi, wo, newUV) * EvalDirectionalLight(newUV);
+            C = RGB2YCoCgR(ToneMap(C));
+            m1 += C;          //用于计算颜色均值
+            m2 += C * C;      //用于计算颜色方差
+        }
+    }
+
+    // Variance clip
+    const int N = 9;
+    const float VarianceClipGamma = 1.0f;//控制AABB的宽度参数
+    vec3 mu = m1 / N;
+    vec3 sigma = sqrt(abs(m2 / N - mu * mu));
+    aabbMin = mu - VarianceClipGamma * sigma;
+    aabbMax = mu + VarianceClipGamma * sigma;
+
+    // clip to center
+    vec3 p_clip = 0.5 * (aabbMax + aabbMin);
+    vec3 e_clip = 0.5 * (aabbMax - aabbMin);
+
+    vec3 v_clip = preColor - p_clip;
+    vec3 v_unit = v_clip.xyz / e_clip;
+    vec3 a_unit = abs(v_unit);
+    float ma_unit = max(a_unit.x, max(a_unit.y, a_unit.z));
+
+    //return mu;
+
+    if (ma_unit > 1.0)
+        return p_clip + v_clip / ma_unit;
+    else
+        return preColor;
+}
+#endif  //TAA
+
 #define SAMPLE_NUM 1
 
 void main() {
@@ -541,7 +677,13 @@ void main() {
 
     vec3 N = normal;
     vec3 V = wo;
+
+#ifdef DENOISE
+    vec2 Xi = Hammersley(uint(uRandom1), uint(1024));
+#else
     vec2 Xi = Hammersley(uint(i), uint(SAMPLE_NUM));
+#endif  //DENOISE
+    //vec2 Xi = Hammersley(uint(i), uint(SAMPLE_NUM));
     vec3 H = ImportanceSampleGGX(Xi, N, roughness);
     vec3 L  = normalize(2.0 * dot(V, H) * H - V);
     
@@ -567,6 +709,32 @@ void main() {
     vec3 color = Lo + L_ind;
     color = color / (color + vec3(1.0));
 
-  //color = pow(clamp(color, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
+#ifdef TAA
+  if(uFrameCount == 0)
+  {
+      FragColor = vec4(color, 1.0);
+      return;
+  }
+  // 周围3x3内距离最近的速度向量
+  //vec2 velocity = texture(uVelocityMap, getClosestOffset()).rg;
+  vec2 velocity = texture(uVelocityMap, vTexCoords).rg;
+  vec2 offsetUV = clamp(vTexCoords - velocity, 0, 1);
+  vec3 preColor = texture(uPreviousColor, offsetUV).rgb;
+  vec3 nowColor = color;
+
+  nowColor = RGB2YCoCgR(ToneMap(nowColor));
+  preColor = RGB2YCoCgR(ToneMap(preColor));
+
+  preColor = clipAABB(nowColor, preColor);
+
+  preColor = UnToneMap(YCoCgR2RGB(preColor));
+  nowColor = UnToneMap(YCoCgR2RGB(nowColor));
+
+  float c = 0.95;  //理论上这里应该是很小的值，比如0.05，但实际0.95效果更好
+  FragColor = vec4(c * nowColor + (1-c) * preColor, 1.0);
+
+#else
+//color = pow(clamp(color, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
   FragColor = vec4(color, 1.0);
+#endif //TAA
 }

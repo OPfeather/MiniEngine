@@ -204,10 +204,10 @@ namespace ff {
         mOrthographicMatrix = OrthographicMatrix::create(-100, 100, -100, 100, 1, 100);
 
         //垂直于世界坐标x轴高为4，宽为4的正方形光源，法线指向x轴正方向
-        edgePos.push_back({ {0, 5, -2.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} });//右上
-        edgePos.push_back({ {0, 5,  2.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f} });//左上
-        edgePos.push_back({ {0, 0, -2.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f} });//右下
-        edgePos.push_back({ {0, 0,  2.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f} });//左下
+        edgePos.push_back({ {0, 2, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} });//右上
+        edgePos.push_back({ {0, 2,  1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f} });//左上
+        edgePos.push_back({ {0, 0, -1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f} });//右下
+        edgePos.push_back({ {0, 0,  1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f} });//左下
 	}
 
 	Light::~Light() noexcept {}
@@ -218,9 +218,9 @@ namespace ff {
         {
             glm::mat4 model = glm::mat4(1.0f);
             glm::vec3& lightRot = rotation;
-            glm::quat quatX = glm::angleAxis(lightRot.x, glm::vec3(1.0f, 0.0f, 0.0f));
-            glm::quat quatY = glm::angleAxis(lightRot.y, glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::quat quatZ = glm::angleAxis(lightRot.z, glm::vec3(0.0f, 0.0f, 1.0f));
+            glm::quat quatX = glm::angleAxis(glm::radians(lightRot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+            glm::quat quatY = glm::angleAxis(glm::radians(lightRot.y), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::quat quatZ = glm::angleAxis(glm::radians(lightRot.z), glm::vec3(0.0f, 0.0f, 1.0f));
             glm::quat finalQuat = quatX * quatY * quatZ; // 顺序敏感
             glm::mat4 rotationMatrix = glm::mat4_cast(finalQuat);
             direction = rotationMatrix * glm::vec4(edgePos[0].normal, 0);
