@@ -2,11 +2,21 @@
   uniform sampler2D udiffuseMap;
 #else
   uniform vec3 uKd;
-#endif
+#endif //HAS_DIFFUSE_MAP
 
 #ifdef HAS_NORMAL_MAP
   uniform sampler2D uNormalTexture;
-#endif
+#endif //HAS_NORMAL_MAP
+
+#ifdef TAA
+in vec4 vCurrentPos;
+in vec4 vPreviousPos;
+
+uniform int uFrameCount;
+
+layout(location = 5) out vec2 outVelocity;
+#endif //TAA
+
 uniform sampler2D uShadowMap;
 uniform float uMetallic;
 uniform float uRoughness;
@@ -36,7 +46,7 @@ uniform vec3 uLightPos;//定向光
 #define SHADOW_MAP_SIZE 1024. //shadow map一条边的长度（假设为正方形）
 #define FRUSTUM_SIZE 100.   //视锥体一个面一条边的长度（假设为正方形）
 #define NEAR_PLANE 1        //光源所用透视矩阵的近平面数据
-#define LIGHT_WORLD_SIZE 5.  //光源在世界空间的大小,灯越大，找到遮挡物范围就越大，虚化越严重
+#define LIGHT_WORLD_SIZE 2.  //光源在世界空间的大小,灯越大，找到遮挡物范围就越大，虚化越严重
 #define LIGHT_SIZE_UV LIGHT_WORLD_SIZE / FRUSTUM_SIZE
 //Edit End
 
@@ -185,7 +195,7 @@ float PCSS(sampler2D shadowMap, vec4 coords, float biasC){
     return 1.0;
 
   // STEP 2: penumbra size
-  float penumbra = (zReceiver - avgBlockerDepth) * LIGHT_SIZE_UV / avgBlockerDepth / 20;//除以20效果好点，否则半径太大，虚化太严重
+  float penumbra = (zReceiver - avgBlockerDepth) * LIGHT_SIZE_UV / avgBlockerDepth / 10;//除以20效果好点，否则半径太大，虚化太严重
   float filterRadiusUV = penumbra;
 
   // STEP 3: filtering
@@ -258,4 +268,16 @@ void main(void) {
 #endif //AREA_LIGHT
 
   outWorldPos = vPosWorld.xyz;
+#ifdef TAA
+  if(uFrameCount != 0)
+  {
+      // 计算NDC空间位置
+      vec2 currentNDC = (vCurrentPos.xy / vCurrentPos.w) * 0.5 + 0.5;
+      vec2 previousNDC = (vPreviousPos.xy / vPreviousPos.w) * 0.5 + 0.5;
+  
+      // 计算速度（像素运动）
+      outVelocity =currentNDC - previousNDC;
+  }
+#endif //TAA
+
 }

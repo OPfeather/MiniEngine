@@ -29,6 +29,9 @@ namespace ff {
 			bool			mHasNormalMap{ false };//本次绘制的模型所使用的材质是否有镜面反射贴图
 			LightType       mLightType = DIRECTION_LIGHT;
 			uint32_t		mDepthPacking{ 0 };
+
+			bool		mDenoise{ false };
+			bool		mTaa{ false };
 		};
 
 		using Ptr = std::shared_ptr<DriverProgram>;
@@ -139,7 +142,8 @@ namespace ff {
 			const Material::Ptr& material,
 			const Object3D::Ptr& object,
 			LightType lightType,
-			std::string vsCode, std::string fsCode);
+			std::string vsCode, std::string fsCode,
+			bool denoise = false, bool taa = false);
 
 		HashType getProgramCacheKey(const DriverProgram::Parameters::Ptr& parameters) noexcept;
 

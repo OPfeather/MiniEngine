@@ -687,8 +687,8 @@ namespace MiniEngine
             ImGui::Text("Rotation");
             
             //ImGui::DragFloat("Pitch", &lightRot.x, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::DragFloat("Yaw", &lightRot.y, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::DragFloat("Roll", &lightRot.z, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragFloat("Yaw", &lightRot.y, 0.02f, -180, 180, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragFloat("Roll", &lightRot.z, 0.02f, -180, 180, "%.2f", ImGuiSliderFlags_AlwaysClamp);
 
             ImGui::DragFloat("mIntensity", &intensity, 0.01f, 1, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
             
@@ -697,7 +697,7 @@ namespace MiniEngine
             ImGui::Spacing();
         }
 
-        if (ImGui::TreeNode("Material"))
+        if (ImGui::TreeNode("RTR"))
         {
             const char* items[] = {"SSR", "Option 2", "Option 3"};
             static int currentItem = 0;
@@ -727,6 +727,15 @@ namespace MiniEngine
             float& roughness = g_runtime_global_context.m_render_system->m_rtr_secene->roughness;
             ImGui::DragFloat("Metallic", &metallic, 0.001f, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
             ImGui::DragFloat("Roughness", &roughness, 0.001f, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            
+            if (ImGui::Checkbox("Denoise", &g_runtime_global_context.m_render_system->mDenoise))
+            {
+                g_runtime_global_context.m_render_system->updateFBO = true;
+            }
+            if (ImGui::Checkbox("TAA", &g_runtime_global_context.m_render_system->mTaa))
+            {
+                g_runtime_global_context.m_render_system->updateFBO = true;
+            }
 
             ImGui::TreePop();
             ImGui::Spacing();

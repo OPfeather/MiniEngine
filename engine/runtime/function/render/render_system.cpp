@@ -112,9 +112,9 @@ namespace MiniEngine
         glm::mat4 view = m_render_camera->getViewMatrix();
         glm::mat4 model = glm::mat4(1.0f);
         glm::vec3& lightRot = m_rtr_base_env.light->rotation;
-        glm::quat quatX = glm::angleAxis(lightRot.x, glm::vec3(1.0f, 0.0f, 0.0f));
-        glm::quat quatY = glm::angleAxis(lightRot.y, glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::quat quatZ = glm::angleAxis(lightRot.z, glm::vec3(0.0f, 0.0f, 1.0f));
+        glm::quat quatX = glm::angleAxis(glm::radians(lightRot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        glm::quat quatY = glm::angleAxis(glm::radians(lightRot.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::quat quatZ = glm::angleAxis(glm::radians(lightRot.z), glm::vec3(0.0f, 0.0f, 1.0f));
         glm::quat finalQuat = quatX * quatY * quatZ; // 顺序敏感
         glm::mat4 rotationMatrix = glm::mat4_cast(finalQuat);
         glm::mat4 translateMatrix = glm::translate(glm::mat4(1.0f), m_rtr_base_env.lightPos);
@@ -579,7 +579,7 @@ namespace MiniEngine
         for (auto obj : m_rtr_secene->mOpaques)
         {
             ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-                obj->getMaterial(), obj, m_rtr_base_env.light->mType, gBuffer_shader_vs, gBuffer_shader_fs);
+                obj->getMaterial(), obj, m_rtr_base_env.light->mType, gBuffer_shader_vs, gBuffer_shader_fs, mDenoise, mTaa);
             HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             gBuffer_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -589,10 +589,28 @@ namespace MiniEngine
             gBuffer_shader->setMat4("uProjectionMatrix", projection);
             gBuffer_shader->setMat4("uViewMatrix", view);
             obj->updateWorldMatrix();
-            auto model = obj->getWorldMatrix();
+            glm::mat4 model = obj->getWorldMatrix();
             gBuffer_shader->setMat4("uModelMatrix", model);
             // Set light uniforms
             gBuffer_shader->setMat4("uLightVP", lightSpaceMatrix);
+
+            if (mTaa)
+            {
+                glm::mat4 preProjection = m_render_camera->getPrePersProjMatrix();
+                glm::mat4 preView = m_render_camera->getPreViewMatrix();
+                gBuffer_shader->setMat4("uPreProjectionMatrix", preProjection);
+                gBuffer_shader->setMat4("uPreViewMatrix", preView);
+                glm::mat4 preModel = obj->getPreWorldMatrix();
+                gBuffer_shader->setMat4("uPreModelMatrix", preModel);
+                gBuffer_shader->setInt("uFrameCount", frameCount);
+                gBuffer_shader->setFloat("uScreenWidth", m_viewport.width);
+                gBuffer_shader->setFloat("uScreenHeight", m_viewport.height);
+
+                // 保存当前VP矩阵供下一帧使用
+                m_render_camera->updatePrePersProjMatrix();
+                m_render_camera->updatePreViewMatrix();
+                obj->updatePreWorldMatrix();
+            }
 
             if (obj->getMaterial()->mIsFloortMaterial)
             {
@@ -648,6 +666,8 @@ namespace MiniEngine
         }
 
         //pass3:屏幕空间光追
+        //模板测试在片段着色器前进行，这里将gbuffer的模板复制过来，进行模板测试，避免渲染空白区域光照
+        
         //refreshFrameBuffer();
         // draw models in the scene
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -658,16 +678,16 @@ namespace MiniEngine
         glEnable(GL_STENCIL_TEST);
         glStencilFunc(GL_EQUAL, 1, 0xFF);
 
-        //模板测试在片段着色器前进行，这里将gbuffer的模板复制过来，进行模板测试，避免渲染空白区域光照
         glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
         glBlitFramebuffer(0, 0, m_viewport.width, m_viewport.height,
             0, 0, m_viewport.width, m_viewport.height,
             GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
+
         get_shader_code(ff::SsrShader, pbr_ssr_shader_vs, pbr_ssr_shader_fs);
 
         ff::DriverProgram::Parameters::Ptr para = m_rtr_shader_programs->getParameters(
-            nullptr, nullptr, m_rtr_base_env.light->mType, pbr_ssr_shader_vs, pbr_ssr_shader_fs);
+            nullptr, nullptr, m_rtr_base_env.light->mType, pbr_ssr_shader_vs, pbr_ssr_shader_fs, mDenoise, mTaa);
         HashType cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
         pbr_ssr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -677,6 +697,20 @@ namespace MiniEngine
         pbr_ssr_shader->setMat4("uProjectionMatrix", projection);
         pbr_ssr_shader->setMat4("uViewMatrix", view);
         pbr_ssr_shader->setVec3("uCameraPos", m_render_camera->Position);
+        if (mTaa)
+        {
+            pbr_ssr_shader->setInt("uFrameCount", frameCount);
+            pbr_ssr_shader->setFloat("uScreenWidth", m_viewport.width);
+            pbr_ssr_shader->setFloat("uScreenHeight", m_viewport.height);
+
+            pbr_ssr_shader->setInt("uPreviousColor", 9);
+            glActiveTexture(GL_TEXTURE9);
+            glBindTexture(GL_TEXTURE_2D, previousColor);
+
+            pbr_ssr_shader->setInt("uVelocityMap", 10);
+            glActiveTexture(GL_TEXTURE10);
+            glBindTexture(GL_TEXTURE_2D, ssVelocityMap);
+        }
         // Set light uniforms
         if (m_rtr_base_env.light->mType == ff::DIRECTION_LIGHT) {
             pbr_ssr_shader->setVec3("uLightDir", m_rtr_base_env.lightPos);
@@ -689,9 +723,9 @@ namespace MiniEngine
         {
             glm::mat4 model = glm::mat4(1.0f);
             glm::vec3& lightRot = m_rtr_base_env.light->rotation;
-            glm::quat quatX = glm::angleAxis(lightRot.x, glm::vec3(1.0f, 0.0f, 0.0f));
-            glm::quat quatY = glm::angleAxis(lightRot.y, glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::quat quatZ = glm::angleAxis(lightRot.z, glm::vec3(0.0f, 0.0f, 1.0f));
+            glm::quat quatX = glm::angleAxis(glm::radians(lightRot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+            glm::quat quatY = glm::angleAxis(glm::radians(lightRot.y), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::quat quatZ = glm::angleAxis(glm::radians(lightRot.z), glm::vec3(0.0f, 0.0f, 1.0f));
             glm::quat finalQuat = quatX * quatY * quatZ; // 顺序敏感
             glm::mat4 rotationMatrix = glm::mat4_cast(finalQuat);
             glm::mat4 translateMatrix = glm::translate(glm::mat4(1.0f), m_rtr_base_env.lightPos);
@@ -739,7 +773,36 @@ namespace MiniEngine
         glActiveTexture(GL_TEXTURE6);
         glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mEavgLut->mGlTexture);
 
+        if (mDenoise)
+        {
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dist(0, 1023);
+
+            int random1 = dist(gen);
+
+            pbr_ssr_shader->setInt("uRandom", random1);
+        }
+        
         renderQuad();
+
+        if (mTaa)
+        {
+            frameCount++;
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);  // 来源
+            glReadBuffer(GL_COLOR_ATTACHMENT0);
+
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, preFramebuffer);  // 目标
+            glDrawBuffer(GL_COLOR_ATTACHMENT0);
+
+            glBlitFramebuffer(
+                0, 0, m_viewport.width, m_viewport.height,  // src rect
+                0, 0, m_viewport.width, m_viewport.height,  // dst rect
+                GL_COLOR_BUFFER_BIT,
+                GL_NEAREST            // 过滤方式（或 GL_LINEAR）
+            );
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glDisable(GL_STENCIL_TEST);
         glEnable(GL_DEPTH_TEST);
     }
@@ -948,7 +1011,7 @@ namespace MiniEngine
 
     void RenderSystem::updateEngineContentViewport(float offset_x, float offset_y, float width, float height)
     {
-        if (m_viewport.width != width || m_viewport.width != height)
+        if (std::fabs(m_viewport.width - width) > 1e-5f || std::fabs(m_viewport.height - height) > 1e-5f)
         {
             updateFBO = true;
         }
@@ -1088,6 +1151,7 @@ namespace MiniEngine
                 glDeleteTextures(1, &ssNormalMap);
                 glDeleteTextures(1, &ssVRM);
                 glDeleteTextures(1, &ssWorldPosMap);
+                glDeleteTextures(1, &ssVelocityMap);
                 glDeleteRenderbuffers(1, &gBufferRboDepth);
                 gBufferFBO = 0;
                 ssColorMap = 0;
@@ -1095,8 +1159,18 @@ namespace MiniEngine
                 ssNormalMap = 0;
                 ssVRM = 0;
                 ssWorldPosMap = 0;
+                ssVelocityMap = 0;
                 gBufferRboDepth = 0;
+                
             }
+            if (preFramebuffer != 0)
+            {
+                glDeleteFramebuffers(1, &preFramebuffer);
+                glDeleteTextures(1, &previousColor);
+                preFramebuffer = 0;
+                previousColor = 0;
+            }
+            frameCount = 0;
             updateFBO = false;
         }
         switch(shaderType)
@@ -1128,6 +1202,30 @@ namespace MiniEngine
                 glClear(GL_DEPTH_BUFFER_BIT);
             break;
             case ff::SsrGbufferShader:
+                if (mTaa)
+                {
+                    if (preFramebuffer == 0)
+                    {
+                        // 创建帧缓冲
+                        glGenFramebuffers(1, &preFramebuffer);
+                        glBindFramebuffer(GL_FRAMEBUFFER, preFramebuffer);
+
+                        // 颜色纹理
+                        glGenTextures(1, &previousColor);
+                        glBindTexture(GL_TEXTURE_2D, previousColor);
+                        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_FLOAT, NULL);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, previousColor, 0);
+
+                        // 检查帧缓冲完整性
+                        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                            std::cerr << "Previous Framebuffer not complete!" << std::endl;
+                        }
+
+                        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    }
+                }
                 if (gBufferFBO == 0)
                 {
                     glGenFramebuffers(1, &gBufferFBO);
@@ -1171,8 +1269,18 @@ namespace MiniEngine
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT4, GL_TEXTURE_2D, ssWorldPosMap, 0);
 
-                    unsigned int attachments[5] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4 };
-                    glDrawBuffers(5, attachments);
+                    if (mTaa)
+                    {
+                        glGenTextures(1, &ssVelocityMap);
+                        glBindTexture(GL_TEXTURE_2D, ssVelocityMap);
+                        glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, m_viewport.width, m_viewport.height, 0, GL_RG, GL_FLOAT, NULL);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT5, GL_TEXTURE_2D, ssVelocityMap, 0);
+                    }
+
+                    unsigned int attachments[6] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4, GL_COLOR_ATTACHMENT5 };
+                    glDrawBuffers(6, attachments);
 
                     //必须添加深度缓冲，否则不会进行深度测试
                     glGenRenderbuffers(1, &gBufferRboDepth);

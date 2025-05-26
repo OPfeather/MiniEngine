@@ -56,6 +56,11 @@ namespace MiniEngine
         float FocusDistance{10.f};
         int FocusMode{0};
 
+        glm::mat4 projection = glm::mat4(1.0f);
+        glm::mat4 preProjection = glm::mat4(1.0f);
+        glm::mat4 view = glm::mat4(1.0f);
+        glm::mat4 preView = glm::mat4(1.0f);
+
         // constructor with vectors
         Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f),
                glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f),
@@ -76,22 +81,49 @@ namespace MiniEngine
         // returns the view matrix calculated using Euler Angles and the LookAt Matrix
         glm::mat4 getViewMatrix()
         {
-            return glm::lookAt(Position, Position + Front, Up);
+            view = glm::lookAt(Position, Position + Front, Up);
+            return view;
         }
 
         // returns the proj matrix
         glm::mat4 getPersProjMatrix()
         {
-            return glm::perspective(glm::radians(Zoom), Aspect, Near, Far);
+            projection = glm::perspective(glm::radians(Zoom), Aspect, Near, Far);
+            return projection;
+        }
+
+        glm::mat4 getPreViewMatrix()
+        {
+            return preView;
+        }
+
+        glm::mat4 getPrePersProjMatrix()
+        {
+            return preProjection;
+        }
+
+        void updatePreViewMatrix()
+        {
+            preView = view;
+        }
+
+        void updatePrePersProjMatrix()
+        {
+            preProjection = projection;
         }
 
         // returns the ortho matrix
         glm::mat4 getOrthoProjMatrix(float image_aspect)
         {   
-            if (Aspect>image_aspect)
-                return glm::ortho(-Aspect, Aspect, -1.0f, 1.0f, 0.0f, 10.0f);
+            if (Aspect > image_aspect)
+            {
+                projection = glm::ortho(-Aspect, Aspect, -1.0f, 1.0f, 0.0f, 10.0f);
+            }
             else
-                return glm::ortho(-image_aspect, image_aspect, -image_aspect / Aspect, image_aspect / Aspect, 0.0f, 10.0f);
+            {
+                projection = glm::ortho(-image_aspect, image_aspect, -image_aspect / Aspect, image_aspect / Aspect, 0.0f, 10.0f);
+            }
+            return projection;
         }
 
         // set aspect from ui
