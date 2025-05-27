@@ -8,14 +8,14 @@
   uniform sampler2D uNormalTexture;
 #endif //HAS_NORMAL_MAP
 
-#ifdef TAA
+#if defined(TAA) || defined(DENOISE)
 in vec4 vCurrentPos;
 in vec4 vPreviousPos;
 
 uniform int uFrameCount;
 
 layout(location = 5) out vec2 outVelocity;
-#endif //TAA
+#endif //TAA & DENOISE
 
 uniform sampler2D uShadowMap;
 uniform float uMetallic;
@@ -268,7 +268,7 @@ void main(void) {
 #endif //AREA_LIGHT
 
   outWorldPos = vPosWorld.xyz;
-#ifdef TAA
+#if defined(TAA) || defined(DENOISE)
   if(uFrameCount != 0)
   {
       // 计算NDC空间位置
@@ -278,6 +278,6 @@ void main(void) {
       // 计算速度（像素运动）
       outVelocity =currentNDC - previousNDC;
   }
-#endif //TAA
+#endif //TAA & DENOISE
 
 }

@@ -599,7 +599,7 @@ namespace MiniEngine
             // Set light uniforms
             gBuffer_shader->setMat4("uLightVP", lightSpaceMatrix);
 
-            if (mTaa)
+            if (mTaa || mDenoise)
             {
                 glm::mat4 preProjection = m_render_camera->getPrePersProjMatrix();
                 glm::mat4 preView = m_render_camera->getPreViewMatrix();
@@ -790,11 +790,11 @@ namespace MiniEngine
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, curColor);
 
-        if (mTaa)
+        if (mTaa || mDenoise)
         {
-            post_process_shader->setInt("uFrameCount", frameCount);
             post_process_shader->setFloat("uScreenWidth", m_viewport.width);
             post_process_shader->setFloat("uScreenHeight", m_viewport.height);
+            post_process_shader->setInt("uFrameCount", frameCount);
 
             post_process_shader->setInt("uPreviousColor", 1);
             glActiveTexture(GL_TEXTURE1);
@@ -804,13 +804,26 @@ namespace MiniEngine
             glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, ssVelocityMap);
 
-            post_process_shader->setInt("ucCurrentDepth", 3);
-            glActiveTexture(GL_TEXTURE3);
-            glBindTexture(GL_TEXTURE_2D, ssDepthMap);
+            if (mTaa)
+            {
+                post_process_shader->setInt("uCurrentDepth", 3);
+                glActiveTexture(GL_TEXTURE3);
+                glBindTexture(GL_TEXTURE_2D, ssDepthMap);
+            }
+            if (mDenoise)
+            {
+                post_process_shader->setInt("uGNormalWorld", 4);
+                glActiveTexture(GL_TEXTURE4);
+                glBindTexture(GL_TEXTURE_2D, ssNormalMap);
+                post_process_shader->setInt("uGPosWorld", 5);
+                glActiveTexture(GL_TEXTURE5);
+                glBindTexture(GL_TEXTURE_2D, ssWorldPosMap);
+            }
+            
         }
         renderQuad();
 
-        if (mTaa)
+        if (mTaa || mDenoise)
         {
             frameCount++;
             glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);  // 来源
@@ -826,6 +839,11 @@ namespace MiniEngine
                 GL_NEAREST            // 过滤方式（或 GL_LINEAR）
             );
         }
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
+        glBlitFramebuffer(0, 0, m_viewport.width, m_viewport.height,
+            0, 0, m_viewport.width, m_viewport.height,
+            GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glEnable(GL_DEPTH_TEST);
     }
@@ -1239,7 +1257,7 @@ namespace MiniEngine
                 glClear(GL_DEPTH_BUFFER_BIT);
             break;
             case ff::SsrGbufferShader:
-                if (mTaa)
+                if (mTaa || mDenoise)
                 {
                     if (preFramebuffer == 0)
                     {
@@ -1306,7 +1324,7 @@ namespace MiniEngine
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT4, GL_TEXTURE_2D, ssWorldPosMap, 0);
 
-                    if (mTaa)
+                    if (mTaa || mDenoise)
                     {
                         glGenTextures(1, &ssVelocityMap);
                         glBindTexture(GL_TEXTURE_2D, ssVelocityMap);
