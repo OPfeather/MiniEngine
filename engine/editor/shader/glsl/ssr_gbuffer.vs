@@ -13,7 +13,7 @@ out vec3 vNormalWorld;
 out vec4 vPosWorld;
 out float vDepth;
 
-#ifdef TAA
+#if defined(TAA) || defined(DENOISE)
 uniform mat4 uPreModelMatrix;
 uniform mat4 uPreViewMatrix;
 uniform mat4 uPreProjectionMatrix;
@@ -45,6 +45,11 @@ void main(void) {
   vTextureCoord = aTextureCoord;
   fragPosLightSpace = uLightVP * posWorld;
 
+#if defined(TAA) || defined(DENOISE)
+  vCurrentPos = uProjectionMatrix * uViewMatrix * uModelMatrix * vec4(aVertexPosition, 1.0);
+  vPreviousPos = uPreProjectionMatrix * uPreViewMatrix * uPreModelMatrix * vec4(aVertexPosition, 1.0);
+#endif //TAA & DENOISE
+
 #ifdef TAA
   float deltaWidth = 1.0/uScreenWidth, deltaHeight = 1.0/uScreenHeight;
   vec2 jitter = vec2(
@@ -54,14 +59,11 @@ void main(void) {
   mat4 jitterMat = uProjectionMatrix;
   jitterMat[2][0] += jitter.x;
   jitterMat[2][1] += jitter.y;
-
-  vCurrentPos = uProjectionMatrix * uViewMatrix * uModelMatrix * vec4(aVertexPosition, 1.0);
-  vPreviousPos = uPreProjectionMatrix * uPreViewMatrix * uPreModelMatrix * vec4(aVertexPosition, 1.0);
   gl_Position = jitterMat * uViewMatrix * uModelMatrix * vec4(aVertexPosition, 1.0);
 
 #else
   gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix * vec4(aVertexPosition, 1.0);
 #endif //TAA
+  
   vDepth = gl_Position.w;
-
 }

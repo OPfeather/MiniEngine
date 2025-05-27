@@ -544,81 +544,38 @@ namespace MiniEngine
         // Inspector
         ImGuiIO& io = ImGui::GetIO();
 
-        if (ImGui::TreeNode("Camera"))
-        {
+        //if (ImGui::TreeNode("Camera"))
+        //{
 
-            ImGui::Text("Position");
-            ImGui::DragFloat("X", &m_camera->Position.x, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::DragFloat("Y", &m_camera->Position.y, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::DragFloat("Z", &m_camera->Position.z, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            
-            ImGui::Text("Rotation");
-            if (ImGui::DragFloat("Yaw", &m_camera->Yaw, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp))
-                m_camera->updateCameraVectors();
-            if (ImGui::DragFloat("Pitch", &m_camera->Pitch, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp))
-                m_camera->updateCameraVectors();
+        //    ImGui::Text("Position");
+        //    ImGui::DragFloat("X", &m_camera->Position.x, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        //    ImGui::DragFloat("Y", &m_camera->Position.y, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        //    ImGui::DragFloat("Z", &m_camera->Position.z, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        //    
+        //    ImGui::Text("Rotation");
+        //    if (ImGui::DragFloat("Yaw", &m_camera->Yaw, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp))
+        //        m_camera->updateCameraVectors();
+        //    if (ImGui::DragFloat("Pitch", &m_camera->Pitch, 0.01f, -INFINITY, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp))
+        //        m_camera->updateCameraVectors();
 
-            ImGui::Text("Field of View");
-            ImGui::DragFloat("Degree", &m_camera->Zoom, 0.01f, 10.f, 135.f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            
-            ImGui::Text("Clip Plane");
-            ImGui::DragFloat("Near", &m_camera->Near, 0.001f, 0.001f, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::DragFloat("Far", &m_camera->Far, 1.f, 0.001f, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            
-            ImGui::Text("Depth of Field");
-            ImGui::DragFloat("Aperture", &m_camera->Aperture, 0.001f, 0.f, 1.f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::Combo("Focus Mode", &m_camera->FocusMode, "Auto\0Manual\0");
-            if (m_camera->FocusMode)
-                ImGui::DragFloat("Distance", &m_camera->FocusDistance, 0.01f, 0.001, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        //    ImGui::Text("Field of View");
+        //    ImGui::DragFloat("Degree", &m_camera->Zoom, 0.01f, 10.f, 135.f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        //    
+        //    ImGui::Text("Clip Plane");
+        //    ImGui::DragFloat("Near", &m_camera->Near, 0.001f, 0.001f, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        //    ImGui::DragFloat("Far", &m_camera->Far, 1.f, 0.001f, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        //    
+        //    ImGui::Text("Depth of Field");
+        //    ImGui::DragFloat("Aperture", &m_camera->Aperture, 0.001f, 0.f, 1.f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        //    ImGui::Combo("Focus Mode", &m_camera->FocusMode, "Auto\0Manual\0");
+        //    if (m_camera->FocusMode)
+        //        ImGui::DragFloat("Distance", &m_camera->FocusDistance, 0.01f, 0.001, INFINITY, "%.2f", ImGuiSliderFlags_AlwaysClamp);
 
-            ImGui::TreePop();
-            ImGui::Spacing();
-        }
+        //    ImGui::TreePop();
+        //    ImGui::Spacing();
+        //}
 
-        if (ImGui::TreeNode("Rendering"))
-        {
-            ImGui::Text("Resolution");
-            ImGui::DragInt("Width", &m_rendering_init_info->Resolution.x, 1.f, 1.f, 4096.f, "%d", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::DragInt("Height", &m_rendering_init_info->Resolution.y, 1.f, 1.f, 4096.f, "%d", ImGuiSliderFlags_AlwaysClamp);
-
-            ImGui::Text("Ray Tracing");
-            ImGui::DragInt("Sample Count", &m_rendering_init_info->SampleCount, 1.f, 1.f, 1048576.f, "%d", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::DragInt("Bounce Limit", &m_rendering_init_info->BounceLimit, 1.f, 1.f, 1024.f, "%d", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::Checkbox("Impotance Samling", &m_rendering_init_info->ImportSample);
-            ImGui::Checkbox("BVH", &m_rendering_init_info->BVH);
-            ImGui::Checkbox("Multi-Thread", &m_rendering_init_info->MultiThread);
-            ImGui::Checkbox("Denoise", &m_rendering_init_info->Denoise);
-
-            ImGui::Text("Output");
-            ImGui::Checkbox("Render to Disk", &m_rendering_init_info->Output);
-            static char buf[128] = "";
-            if (ImGui::InputText("..", buf, 128))
-            {
-                strcpy(m_rendering_init_info->SavePath, buf);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Browse"))
-            {
-                nfdchar_t *outPath = NULL;
-                nfdresult_t result = NFD_SaveDialog(NULL, NULL, &outPath);
-                    
-                if ( result == NFD_OKAY ) 
-                {
-                    strcpy(buf, outPath);
-                    strcpy(m_rendering_init_info->SavePath, buf);
-                    free(outPath);
-                }
-                else if ( result == NFD_CANCEL ) {}
-                else {
-                    LOG_ERROR(NFD_GetError());
-                }
-            }
-
-            ImGui::TreePop();
-            ImGui::Spacing();
-        }
-
-        if (ImGui::TreeNode("scene"))
+        if (ImGui::TreeNode("Scene Config"))
         {
             bool res = false;
             //floor
@@ -697,7 +654,7 @@ namespace MiniEngine
             ImGui::Spacing();
         }
 
-        if (ImGui::TreeNode("RTR"))
+        if (ImGui::TreeNode("Real-time Rendering"))
         {
             const char* items[] = {"SSR", "Option 2", "Option 3"};
             static int currentItem = 0;
@@ -735,6 +692,49 @@ namespace MiniEngine
             if (ImGui::Checkbox("TAA", &g_runtime_global_context.m_render_system->mTaa))
             {
                 g_runtime_global_context.m_render_system->updateFBO = true;
+            }
+
+            ImGui::TreePop();
+            ImGui::Spacing();
+        }
+
+        if (ImGui::TreeNode("Offline Rendering"))
+        {
+            ImGui::Text("Resolution");
+            ImGui::DragInt("Width", &m_rendering_init_info->Resolution.x, 1.f, 1.f, 4096.f, "%d", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragInt("Height", &m_rendering_init_info->Resolution.y, 1.f, 1.f, 4096.f, "%d", ImGuiSliderFlags_AlwaysClamp);
+
+            ImGui::Text("Ray Tracing");
+            ImGui::DragInt("Sample Count", &m_rendering_init_info->SampleCount, 1.f, 1.f, 1048576.f, "%d", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::DragInt("Bounce Limit", &m_rendering_init_info->BounceLimit, 1.f, 1.f, 1024.f, "%d", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::Checkbox("Impotance Samling", &m_rendering_init_info->ImportSample);
+            ImGui::Checkbox("BVH", &m_rendering_init_info->BVH);
+            ImGui::Checkbox("Multi-Thread", &m_rendering_init_info->MultiThread);
+            ImGui::Checkbox("Denoise", &m_rendering_init_info->Denoise);
+
+            ImGui::Text("Output");
+            ImGui::Checkbox("Render to Disk", &m_rendering_init_info->Output);
+            static char buf[128] = "";
+            if (ImGui::InputText("..", buf, 128))
+            {
+                strcpy(m_rendering_init_info->SavePath, buf);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Browse"))
+            {
+                nfdchar_t* outPath = NULL;
+                nfdresult_t result = NFD_SaveDialog(NULL, NULL, &outPath);
+
+                if (result == NFD_OKAY)
+                {
+                    strcpy(buf, outPath);
+                    strcpy(m_rendering_init_info->SavePath, buf);
+                    free(outPath);
+                }
+                else if (result == NFD_CANCEL) {}
+                else {
+                    LOG_ERROR(NFD_GetError());
+                }
             }
 
             ImGui::TreePop();

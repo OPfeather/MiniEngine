@@ -498,7 +498,7 @@ vec3 EvalBRDF(vec3 wi, vec3 wo, vec2 uv) {
 }
 #endif //AREA_LIGHT
 
-#define SAMPLE_NUM 1
+#define SAMPLE_NUM 10
 
 void main() {
   float s = InitRand(gl_FragCoord.xy);
@@ -546,12 +546,12 @@ void main() {
     vec3 N = normal;
     vec3 V = wo;
 
-#ifdef DENOISE
-    vec2 Xi = Hammersley(uint(uRandom1), uint(1024));
-#else
+// #ifdef DENOISE
+//     vec2 Xi = Hammersley(uint(uRandom % 100), uint(100));
+// #else
+//     vec2 Xi = Hammersley(uint(i), uint(SAMPLE_NUM));
+// #endif  //DENOISE
     vec2 Xi = Hammersley(uint(i), uint(SAMPLE_NUM));
-#endif  //DENOISE
-    //vec2 Xi = Hammersley(uint(i), uint(SAMPLE_NUM));
     vec3 H = ImportanceSampleGGX(Xi, N, roughness);
     vec3 L  = normalize(2.0 * dot(V, H) * H - V);
     
