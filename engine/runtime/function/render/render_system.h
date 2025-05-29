@@ -61,6 +61,16 @@ namespace MiniEngine
             ff::BoxGeometry::Ptr floorGeometry{ nullptr };
             float metallic = 1.0;
             float roughness = 0.9;
+
+            bool isRenderSkyBox = false;
+            //环境光照
+            unsigned int skyBoxVAO = 0;
+            unsigned int cubeMapFBO = 0;
+            unsigned int cubeMapRBO = 0;
+            unsigned int prefilterMap = 0;
+            unsigned int brdfLUTTexture = 0;
+            //天空盒
+            ff::CubeTexture::Ptr skyBox = nullptr;
     };
 
     struct RenderSystemInitInfo
@@ -99,9 +109,11 @@ namespace MiniEngine
         void rtr_scene();
         void rtr_object();
         void rtr_light_model();
+        void rtr_skybox();
         void get_shader_code(ff::ShaderType shaderType, string &vs, string &fs) noexcept;//生成shader并设置uniform
         void config_FBO(ff::ShaderType shaderType) noexcept;
         void rtr_process_floor(glm::vec3 pos, ff::MaterialType materialType = ff::MeshBasicMaterialType);
+        void rtr_process_skybox();
 
         void projectObject(const ff::Object3D::Ptr& object) noexcept;
 
@@ -128,6 +140,7 @@ namespace MiniEngine
 
         ff::Frustum::Ptr m_rtr_frustum{ nullptr };
         std::shared_ptr<Shader> m_rtr_light_shader;
+        std::shared_ptr<Shader> m_rtr_skybox_shader;
         ff::DriverPrograms::Ptr m_rtr_shader_programs{ nullptr };
     
     public:

@@ -46,6 +46,8 @@ namespace ff {
 
 		~CubeTexture() noexcept;
 
+		void setCubeTexture();
+
 		Source::Ptr mSources[CUBE_TEXTURE_COUNT] = { nullptr };
 	};
 }

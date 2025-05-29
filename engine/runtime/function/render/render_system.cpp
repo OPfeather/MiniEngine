@@ -36,6 +36,7 @@ namespace MiniEngine
         //glEnable(GL_MULTISAMPLE);
         //glEnable(GL_FRAMEBUFFER_SRGB);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
         // setup window & viewport
         m_window = init_info.window_system->getWindow();
@@ -103,10 +104,10 @@ namespace MiniEngine
     {
         std::shared_ptr<ConfigManager> config_manager = g_runtime_global_context.m_config_manager;
         ASSERT(config_manager);
-        //绘制球形灯源
+
         m_rtr_light_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "light.vert").generic_string().data(),
-                                                   (config_manager->getShaderFolder() / "light.frag").generic_string().data());
-        
+            (config_manager->getShaderFolder() / "light.frag").generic_string().data());
+
         m_rtr_light_shader->use();
         glm::mat4 projection = m_render_camera->getPersProjMatrix();
         glm::mat4 view = m_render_camera->getViewMatrix();
@@ -123,6 +124,32 @@ namespace MiniEngine
         m_rtr_light_shader->setMat4("view", view);
         m_rtr_light_shader->setMat4("model", model);
         m_rtr_base_env.light->light_shape_render();
+     
+    }
+
+    void RenderSystem::rtr_skybox()
+    {
+        std::shared_ptr<ConfigManager> config_manager = g_runtime_global_context.m_config_manager;
+        ASSERT(config_manager);
+        if (m_rtr_base_env.isRenderSkyBox)
+        {
+            m_rtr_skybox_shader = std::make_shared<Shader>((config_manager->getShaderFolder() / "background.vs").generic_string().data(),
+                (config_manager->getShaderFolder() / "background.fs").generic_string().data());
+
+            glDepthFunc(GL_LEQUAL);// change depth function so depth test passes when values are equal to depth buffer's content
+            m_rtr_skybox_shader->use();
+            glm::mat4 projection = m_render_camera->getPersProjMatrix();
+            glm::mat4 view = glm::mat4(glm::mat3(m_render_camera->getViewMatrix()));
+            m_rtr_skybox_shader->setMat4("projection", projection);
+            m_rtr_skybox_shader->setMat4("view", view);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, m_rtr_base_env.skyBox->mGlTexture);
+            m_rtr_skybox_shader->setInt("environmentMap", 0);
+            glBindVertexArray(m_rtr_base_env.skyBoxVAO); 
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+            glBindVertexArray(0);
+            glDepthFunc(GL_LESS);// set depth function back to default
+        }
     }
 
     void RenderSystem::phone_render()
@@ -584,7 +611,8 @@ namespace MiniEngine
         for (auto obj : m_rtr_secene->mOpaques)
         {
             para = m_rtr_shader_programs->getParameters(
-                obj->getMaterial(), obj, m_rtr_base_env.light->mType, gBuffer_shader_vs, gBuffer_shader_fs, mDenoise, mTaa);
+                obj->getMaterial(), obj, m_rtr_base_env.light->mType, gBuffer_shader_vs, gBuffer_shader_fs,
+                mDenoise, mTaa, m_rtr_base_env.isRenderSkyBox);
             cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
             gBuffer_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -684,7 +712,8 @@ namespace MiniEngine
         get_shader_code(ff::SsrShader, pbr_ssr_shader_vs, pbr_ssr_shader_fs);
 
         para = m_rtr_shader_programs->getParameters(
-            nullptr, nullptr, m_rtr_base_env.light->mType, pbr_ssr_shader_vs, pbr_ssr_shader_fs, mDenoise, mTaa);
+            nullptr, nullptr, m_rtr_base_env.light->mType, pbr_ssr_shader_vs, pbr_ssr_shader_fs,
+            mDenoise, mTaa, m_rtr_base_env.isRenderSkyBox);
         cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
         pbr_ssr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -766,6 +795,16 @@ namespace MiniEngine
         pbr_ssr_shader->setInt("uEavgLut", 6);
         glActiveTexture(GL_TEXTURE6);
         glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mEavgLut->mGlTexture);
+
+        if (m_rtr_base_env.isRenderSkyBox)
+        {
+            pbr_ssr_shader->setInt("uPrefilterMap", 9);
+            glActiveTexture(GL_TEXTURE9);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, m_rtr_base_env.prefilterMap);
+            pbr_ssr_shader->setInt("uIBLBrdfLUT", 10);
+            glActiveTexture(GL_TEXTURE10);
+            glBindTexture(GL_TEXTURE_2D, m_rtr_base_env.brdfLUTTexture);
+        }
 
         renderQuad();
 
@@ -910,24 +949,25 @@ namespace MiniEngine
             m_canvas_shader->setMat4("model", model);
             m_render_canvas->Draw(m_canvas_shader);
         }
-        //else if (m_render_model)
-        //{
-        //    m_render_shader->use();
-        //    glm::mat4 projection = m_render_camera->getPersProjMatrix();
-        //    glm::mat4 view = m_render_camera->getViewMatrix();
-        //    glm::mat4 model = glm::mat4(1.0f);
-        //    m_render_shader->setMat4("projection", projection);
-        //    m_render_shader->setMat4("view", view);
-        //    m_render_shader->setMat4("model", model);
-        //    m_render_shader->setVec3("viewPos", m_render_camera->Position);
-        //    m_render_model->Draw(m_render_shader);
-        //    
-        //}
+        else if (m_render_model)
+        {
+            m_render_shader->use();
+            glm::mat4 projection = m_render_camera->getPersProjMatrix();
+            glm::mat4 view = m_render_camera->getViewMatrix();
+            glm::mat4 model = glm::mat4(1.0f);
+            m_render_shader->setMat4("projection", projection);
+            m_render_shader->setMat4("view", view);
+            m_render_shader->setMat4("model", model);
+            m_render_shader->setVec3("viewPos", m_render_camera->Position);
+            m_render_model->Draw(m_render_shader);
+            
+        }
         else if (m_rtr_secene->getChildren().size() > 0)
         {
             rtr_object();
         }
         rtr_light_model();
+        rtr_skybox();
 
         // draw editor ui
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1429,6 +1469,181 @@ namespace MiniEngine
                 std::remove(render_objs.begin(), render_objs.end(), floor),
                 render_objs.end());
             m_rtr_base_env.floor = nullptr;
+        }
+    }
+
+    void RenderSystem::rtr_process_skybox() {
+        if (m_rtr_base_env.isRenderSkyBox)
+        {
+            if (m_rtr_base_env.skyBoxVAO == 0)
+            {
+                float skyboxVertices[] = {
+                    // back face
+                    -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
+                     1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
+                     1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 0.0f, // bottom-right         
+                     1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
+                    -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
+                    -1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 1.0f, // top-left
+                    // front face
+                    -1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
+                     1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 0.0f, // bottom-right
+                     1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
+                     1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
+                    -1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 1.0f, // top-left
+                    -1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
+                    // left face
+                    -1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
+                    -1.0f,  1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-left
+                    -1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
+                    -1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
+                    -1.0f, -1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-right
+                    -1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
+                    // right face
+                     1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
+                     1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
+                     1.0f,  1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-right         
+                     1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
+                     1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
+                     1.0f, -1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-left     
+                     // bottom face
+                     -1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
+                      1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 1.0f, // top-left
+                      1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
+                      1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
+                     -1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 0.0f, // bottom-right
+                     -1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
+                     // top face
+                     -1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
+                      1.0f,  1.0f , 1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
+                      1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 1.0f, // top-right     
+                      1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
+                     -1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
+                     -1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 0.0f  // bottom-left  
+                };
+
+                unsigned int skyBoxVBO;
+                // AREA LIGHT
+                glGenVertexArrays(1, &m_rtr_base_env.skyBoxVAO);
+                glBindVertexArray(m_rtr_base_env.skyBoxVAO);
+
+                glGenBuffers(1, &skyBoxVBO);
+                glBindBuffer(GL_ARRAY_BUFFER, skyBoxVBO);
+                glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+                glEnableVertexAttribArray(1);
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+                glEnableVertexAttribArray(2);
+                glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+                glBindVertexArray(0);
+            }
+
+            if (m_rtr_base_env.cubeMapFBO == 0)
+            {
+                glGenFramebuffers(1, &m_rtr_base_env.cubeMapFBO);
+                glGenRenderbuffers(1, &m_rtr_base_env.cubeMapRBO);
+
+                glBindFramebuffer(GL_FRAMEBUFFER, m_rtr_base_env.cubeMapFBO);
+                glBindRenderbuffer(GL_RENDERBUFFER, m_rtr_base_env.cubeMapRBO);
+                glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+                glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_rtr_base_env.cubeMapRBO);
+            }
+            if (m_rtr_base_env.prefilterMap == 0)
+            {
+                glGenTextures(1, &m_rtr_base_env.prefilterMap);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, m_rtr_base_env.prefilterMap);
+                for (unsigned int i = 0; i < 6; ++i)
+                {
+                    glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 128, 128, 0, GL_RGB, GL_FLOAT, nullptr);
+                }
+                glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); // be sure to set minification filter to mip_linear 
+                glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                // generate mipmaps for the cubemap so OpenGL automatically allocates the required memory.
+                glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+
+                std::shared_ptr<ConfigManager> config_manager = g_runtime_global_context.m_config_manager;
+                std::shared_ptr<Shader> prefilterShader = std::make_shared<Shader>((config_manager->getShaderFolder() / "ibl_light_prt.vs").generic_string().data(),
+                    (config_manager->getShaderFolder() / "ibl_light_prt.fs").generic_string().data());
+
+                glm::mat4 captureViews[] =
+                {
+                    glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+                    glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+                    glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)),
+                    glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)),
+                    glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+                    glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))
+                };
+                glm::mat4 captureProjection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+
+                prefilterShader->use();
+                prefilterShader->setInt("uEnvironmentMap", 0);
+                prefilterShader->setMat4("uProjectionMatrix", captureProjection);
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_CUBE_MAP, m_rtr_base_env.skyBox->mGlTexture);
+
+                glBindFramebuffer(GL_FRAMEBUFFER, m_rtr_base_env.cubeMapFBO);
+                unsigned int maxMipLevels = 5;
+                for (unsigned int mip = 0; mip < maxMipLevels; ++mip)
+                {
+                    // reisze framebuffer according to mip-level size.
+                    unsigned int mipWidth = static_cast<unsigned int>(128 * std::pow(0.5, mip));
+                    unsigned int mipHeight = static_cast<unsigned int>(128 * std::pow(0.5, mip));
+                    glBindRenderbuffer(GL_RENDERBUFFER, m_rtr_base_env.cubeMapRBO);
+                    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, mipWidth, mipHeight);
+                    glViewport(0, 0, mipWidth, mipHeight);
+
+                    float roughness = (float)mip / (float)(maxMipLevels - 1);
+                    prefilterShader->setFloat("uRoughness", roughness);
+                    for (unsigned int i = 0; i < 6; ++i)
+                    {
+                        prefilterShader->setMat4("uViewMatrix", captureViews[i]);
+                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, m_rtr_base_env.prefilterMap, mip);
+                        glDepthFunc(GL_LEQUAL);
+                        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                        glBindVertexArray(m_rtr_base_env.skyBoxVAO);
+                        glDrawArrays(GL_TRIANGLES, 0, 36);
+                        glBindVertexArray(0);
+                        glDepthFunc(GL_LESS);
+                    }
+                }
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            }
+            if (m_rtr_base_env.brdfLUTTexture == 0)
+            {
+                glGenTextures(1, &m_rtr_base_env.brdfLUTTexture);
+
+                // pre-allocate enough memory for the LUT texture.
+                glBindTexture(GL_TEXTURE_2D, m_rtr_base_env.brdfLUTTexture);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, 512, 512, 0, GL_RG, GL_FLOAT, 0);
+                // be sure to set wrapping mode to GL_CLAMP_TO_EDGE
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+                // then re-configure capture framebuffer object and render screen-space quad with BRDF shader.
+                glBindFramebuffer(GL_FRAMEBUFFER, m_rtr_base_env.cubeMapFBO);
+                glBindRenderbuffer(GL_RENDERBUFFER, m_rtr_base_env.cubeMapRBO);
+                glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_rtr_base_env.brdfLUTTexture, 0);
+
+                glViewport(0, 0, 512, 512);
+                std::shared_ptr<ConfigManager> config_manager = g_runtime_global_context.m_config_manager;
+                std::shared_ptr<Shader> brdfShader = std::make_shared<Shader>((config_manager->getShaderFolder() / "brdf_prt.vs").generic_string().data(),
+                    (config_manager->getShaderFolder() / "brdf_prt.fs").generic_string().data());
+                brdfShader->use();
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                renderQuad();
+
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            }
         }
     }
 

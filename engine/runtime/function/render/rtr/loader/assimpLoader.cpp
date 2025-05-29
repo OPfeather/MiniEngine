@@ -365,14 +365,6 @@ namespace ff {
 			}
 		}
 
-		int lastReadLine = 1;
-		
-		if (mesh->mMaterialIndex >= 0 && materials[mesh->mMaterialIndex]->mIsPrtMaterial) {
-			std::vector<float> aPrecomputeLT = readNLinesFromFile("assets/textures/GraceCathedral/transport.txt", mesh->mNumVertices, lastReadLine);
-			updateFirstLine("assets/textures/GraceCathedral/transport.txt", lastReadLine - 1);
-			geometry->setAttribute("aPrecomputeLT", ff::Attributef::create(aPrecomputeLT, 3));
-		}
-
 		//make object
 		geometry->setAttribute("position", Attributef::create(positions, 3));
 		geometry->setAttribute("normal", Attributef::create(normals, 3));

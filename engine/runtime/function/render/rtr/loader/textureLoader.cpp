@@ -13,12 +13,12 @@ namespace ff {
 		Texture::Ptr texture = nullptr;
 		std::string filePath = path;
 
-		//хГ╧Шб╥╬╤н╙©уё╛тРй╧сцд╛хом╪ф╛
+		//О©╫О©╫О©╫б╥О©╫О©╫н╙О©╫уёО©╫О©╫О©╫й╧О©╫О©╫д╛О©╫О©╫м╪ф╛
 		if (filePath.empty()) {
 			filePath = DefaultTexturePath;
 		}
 
-		//╪Л╡Ийг╥Яря╬╜иЗЁи╧Щsourceё╛хГ╧ШиЗЁиак╬м╢сcacheюОцФх║ЁЖю╢
+		//О©╫О©╫О©╫О©╫г╥О©╫О©╫я╬О©╫О©╫О©╫О©╫и╧О©╫sourceО©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫к╬м╢О©╫cacheО©╫О©╫О©╫О©╫х║О©╫О©╫О©╫О©╫
 		Source::Ptr source = Cache::getInstance()->getSource(path);
 
 		if (source) {
@@ -27,22 +27,22 @@ namespace ff {
 		}
 		else {
 			source = Source::create();
-			//ртобйЩ╬щ╤╪йгпбйЩ╬щ,кЫртfalse╣Т
+			//О©╫О©╫О©╫О©╫О©╫О©╫О©╫щ╤О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫,О©╫О©╫О©╫О©╫falseО©╫О©╫
 			source->mNeedsUpdate = false;
 
-			//й╧сцрЩсцюЮпмё╛©иртж╠╫с╤тdata╫Ьпп╦Э╦дё╛╫А╧Ш╩Ам╛╡╫╣╫source╣дData╣╠жп
+			//й╧О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫мёО©╫О©╫О©╫О©╫О©╫ж╠О©╫с╤О©╫dataО©╫О©╫О©╫п╦О©╫О©╫дёО©╫О©╫О©╫О©╫О©╫О©╫м╛О©╫О©╫О©╫О©╫sourceО©╫О©╫DataО©╫О©╫О©╫О©╫
 			auto& data = source->mData;
 
 			int			picType = 0;
 			int width = 0, height = 0;
 
-			//уШ╦Ж╤ах║ЁЖю╢╣дм╪ф╛йЩ╬щ╢Сп║
+			//О©╫О©╫О©╫О©╫О©╫О©╫х║О©╫О©╫О©╫О©╫О©╫О©╫м╪ф╛О©╫О©╫О©╫щ╢О©╫п║
 			uint32_t dataSize{ 0 };
 
-			//╤ах║ЁЖю╢╣дм╪ф╛йЩ╬щж╦уК
+			//О©╫О©╫х║О©╫О©╫О©╫О©╫О©╫О©╫м╪ф╛О©╫О©╫О©╫О©╫ж╦О©╫О©╫
 			unsigned char* bits{ nullptr };
 
-			//р╙ц╢╢сс╡ел╤ах║ё╛р╙ц╢╢сйЩ╬щаВё╗мЬбГйЩ╬щ╩РуъдёпмйЩ╬щё╘╤ах║
+			//р╙ц╢О©╫О©╫с╡О©╫л╤О©╫х║О©╫О©╫р╙ц╢О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫щ╩О©╫О©╫О©╫дёО©╫О©╫О©╫О©╫О©╫щёО©╫О©╫О©╫х║
 			if (dataIn == nullptr) {
 				//if nofile, use default
 				std::fstream file(filePath);
@@ -59,12 +59,13 @@ namespace ff {
 				}
 				
 				bits = stbi_load(filePath.c_str(), &width, &height, &picType, toStbImageFormat(TextureFormat::RGBA));
+				stbi_set_flip_vertically_on_load(false);
 			}
 			else {
-				//╪гб╪акуШ╦ЖйЩ╬щ╣д╢Сп║
+				//О©╫О©╫б╪О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫щ╣д╢О©╫п║
 				uint32_t dataInSize = 0;
 
-				//р╩╦Жfbxдёпмсп©идэ╢Р╟Э╫Ью╢jpgё╛╢Ьспя╧кУ╦Яй╫╣дм╪ф╛гИ©Жобё╛height©идэн╙0ё╛width╬м╢З╠МакуШ╦Жм╪ф╛╣д╢Сп║
+				//р╩О©╫О©╫fbxдёО©╫О©╫О©╫п©О©╫О©╫э╢О©╫О©╫О©╫О©╫О©╫О©╫jpgО©╫О©╫О©╫О©╫О©╫О©╫я╧О©╫О©╫О©╫О©╫й╫О©╫О©╫м╪ф╛О©╫О©╫О©╫О©╫бёО©╫heightО©╫О©╫О©╫О©╫н╙0О©╫О©╫widthО©╫м╢О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫м╪ф╛О©╫д╢О©╫п║
 				if (!heightIn) {
 					dataInSize = widthIn;
 				}
@@ -72,21 +73,21 @@ namespace ff {
 					dataInSize = widthIn * heightIn;
 				}
 
-				//нрцгожтздц╣╫╣дdataInё╛╡╒╡╩йгу╧©╙╣дн╩м╪йЩ╬щё╛сп©идэйгр╩╦Жjpg png╣х╦Яй╫╣дм╪ф╛йЩ╬щаВ
+				//О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫ц╣О©╫О©╫О©╫dataInО©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫у╧О©╫О©╫О©╫О©╫н╩м╪О©╫О©╫О©╫щёО©╫О©╫п©О©╫О©╫О©╫О©╫О©╫р╩О©╫О©╫jpg pngО©╫х╦О©╫й╫О©╫О©╫м╪ф╛О©╫О©╫О©╫О©╫О©╫О©╫
 				bits = stbi_load_from_memory(dataIn, dataInSize, &width, &height, &picType, toStbImageFormat(TextureFormat::RGBA));
 			}
 
 			dataSize = width * height * toByteSize(TextureFormat::RGBA);
 
-			//╬╜╧ЩиойЖ╧ЩЁлё╛жусзв╪╠╦╨цаккЫсп╣д╠ьр╙йЩ╬щё╛╫собю╢лНЁДsource╣дdata(Vector<Byte>)
+			//О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫лёО©╫О©╫О©╫О©╫О©╫в╪О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫п╣д╠О©╫р╙О©╫О©╫О©╫щёО©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫sourceО©╫О©╫data(Vector<Byte>)
 			if (dataSize && bits) {
 				data.resize(dataSize);
 
-				//╢сbitsоРdata╣д╣ьж╥©╙м╥ё╛©╫╠╢dataSize╦ЖByte╣дйЩ╬щ
+				//О©╫О©╫bitsО©╫О©╫dataО©╫д╣О©╫ж╥О©╫О©╫м╥О©╫О©╫О©╫О©╫О©╫О©╫dataSizeО©╫О©╫ByteО©╫О©╫О©╫О©╫О©╫О©╫
 				memcpy(data.data(), bits, dataSize);
 			}
 
-			//╢кй╠ё╛bitsж╦оР╣дсиstbimage╦Ь╣╫╣ддз╢ФйЩ╬щё╛╬мdeleteак
+			//О©╫О©╫й╠О©╫О©╫bitsж╦О©╫О©╫О©╫О©╫О©╫stbimageО©╫О©╫О©╫О©╫О©╫О©╫О©╫з╢О©╫О©╫О©╫О©╫щёО©╫О©╫О©╫deleteО©╫О©╫
 			stbi_image_free(bits);
 
 			source->mWidth = width;
