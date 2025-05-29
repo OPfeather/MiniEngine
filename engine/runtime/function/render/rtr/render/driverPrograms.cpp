@@ -27,6 +27,7 @@ namespace ff {
 		prefixFragment.append(parameters->mHasNormalMap ? "#define HAS_NORMAL_MAP\n" : "");
 		prefixFragment.append(parameters->mDenoise ? "#define DENOISE\n" : "");
 		prefixFragment.append(parameters->mTaa ? "#define TAA\n" : "");
+		prefixFragment.append(parameters->mIBL ? "#define IBL\n" : "");
 		switch(parameters->mLightType){
 			case DIRECTION_LIGHT:
 				prefixFragment.append("#define DIRECTION_LIGHT\n");
@@ -36,9 +37,6 @@ namespace ff {
 			break;
 			case AREA_LIGHT:
 				prefixFragment.append("#define AREA_LIGHT\n");
-			break;
-			case IBL:
-				prefixFragment.append("#define IBL\n");
 			break;
 			default:
 				prefixFragment.append("#define DIRECTION_LIGHT\n");
@@ -180,7 +178,7 @@ namespace ff {
 		const Object3D::Ptr& object,
 		LightType lightType,
 		std::string vsCode, std::string fsCode,
-		bool denoise, bool taa
+		bool denoise, bool taa, bool ibl
 	) {
 		auto parameters = DriverProgram::Parameters::create();
 
@@ -191,6 +189,7 @@ namespace ff {
 		parameters->mLightType = lightType;
 		parameters->mDenoise = denoise;
 		parameters->mTaa = taa;
+		parameters->mIBL = ibl;
 
 		if (material == nullptr || object == nullptr)
 		{
@@ -251,6 +250,7 @@ namespace ff {
 		keyString.append(std::to_string(parameters->mLightType));
 		keyString.append(std::to_string(parameters->mDenoise));
 		keyString.append(std::to_string(parameters->mTaa));
+		keyString.append(std::to_string(parameters->mIBL));
 
 		return hasher(keyString);
 	}

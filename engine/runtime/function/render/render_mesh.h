@@ -131,7 +131,7 @@ namespace MiniEngine
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-            if (material.diffuse_map->data)
+            if (material.diffuse_map && material.diffuse_map->data)
             {
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, material.diffuse_map->width, material.diffuse_map->height, 0, GL_RGB, GL_UNSIGNED_BYTE, material.diffuse_map->data);
                 glGenerateMipmap(GL_TEXTURE_2D);  //生成mipmap
@@ -151,7 +151,7 @@ namespace MiniEngine
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-            if (material.specular_map->data)
+            if (material.specular_map && material.specular_map->data)
             {
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, material.specular_map->width, material.specular_map->height, 0, GL_RGB, GL_UNSIGNED_BYTE, material.specular_map->data);
                 glGenerateMipmap(GL_TEXTURE_2D);  //生成mipmap

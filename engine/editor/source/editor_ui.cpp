@@ -25,6 +25,7 @@
 #include "runtime/function/render/window_system.h"
 #include "runtime/function/render/rtr/loader/assimpLoader.h"
 #include "runtime/function/render/rtr/loader/textureLoader.h"
+#include "runtime/function/render/rtr/loader/cubeTextureLoader.h"
 #include "runtime/function/render/rtr/geometries/boxGeometry.h"
 #include "runtime/function/render/rtr/objects/mesh.h"
 
@@ -347,7 +348,7 @@ namespace MiniEngine
                         //TODO:加载材质信息
                         g_runtime_global_context.m_render_system->m_rtr_secene->mBRDFLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_E_LUT.png", nullptr, 0, 0, true);
                         g_runtime_global_context.m_render_system->m_rtr_secene->mEavgLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_Eavg_LUT.png", nullptr, 0, 0, true);
-                        //g_runtime_global_context.m_render_system->rtr_process_floor(g_runtime_global_context.m_render_system->m_rtr_base_env.floorPos);
+                        g_runtime_global_context.m_render_system->rtr_process_floor(g_runtime_global_context.m_render_system->m_rtr_base_env.floorPos);
                         free(outPath);
                     }
                     else if ( result == NFD_CANCEL ) {}
@@ -599,7 +600,7 @@ namespace MiniEngine
                 
             //light
             ImGui::Text("Light");
-            const char* items[] = { "Direction Light", "Point Light", "Area Light", "Cube Light"};
+            const char* items[] = { "Direction Light", "Point Light", "Area Light"};
             static int currentItem = 0;
             static int previousItem = -1;  // 保存上一次选择的值
             glm::vec3& lightPos = g_runtime_global_context.m_render_system->m_rtr_base_env.lightPos;
@@ -625,9 +626,6 @@ namespace MiniEngine
                         g_runtime_global_context.m_render_system->m_rtr_base_env.light->loadMinvTexture();
                         g_runtime_global_context.m_render_system->m_rtr_base_env.light->loadFGTexture();
                         break;
-                    case 3:
-                        g_runtime_global_context.m_render_system->m_rtr_base_env.light->mType = ff::IBL;
-                        break;
                     }
                 }
             }
@@ -648,6 +646,21 @@ namespace MiniEngine
             ImGui::DragFloat("Roll", &lightRot.z, 0.02f, -180, 180, "%.2f", ImGuiSliderFlags_AlwaysClamp);
 
             ImGui::DragFloat("mIntensity", &intensity, 0.01f, 1, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+
+            if (ImGui::Checkbox("SkyBox", &g_runtime_global_context.m_render_system->m_rtr_base_env.isRenderSkyBox))
+            {
+                std::vector<std::string> cubePaths = {
+                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/right.jpg",
+                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/left.jpg",
+                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/top.jpg",
+                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/bottom.jpg",
+                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/front.jpg",
+                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/back.jpg",
+                };
+                g_runtime_global_context.m_render_system->m_rtr_base_env.skyBox = ff::CubeTextureLoader::load(cubePaths);
+                g_runtime_global_context.m_render_system->m_rtr_base_env.skyBox->setCubeTexture();
+                g_runtime_global_context.m_render_system->rtr_process_skybox();
+            }
             
 
             ImGui::TreePop();

@@ -30,6 +30,12 @@ uniform sampler2D uEavgLut;
 uniform int uRandom;
 #endif //DENOISE
 
+// IBL
+#ifdef IBL
+uniform samplerCube uPrefilterMap;
+uniform sampler2D uIBLBrdfLUT;
+#endif //IBL
+
 in mat4 vWorldToScreen;
 in vec2 vTexCoords;
 
@@ -179,6 +185,12 @@ vec3 fresnelSchlick(vec3 F0, vec3 V, vec3 H)
     return F0 + (1.0 - F0) * pow(1.0 - dot(V, H), 5.0);
 }
 
+//这是一个对菲涅尔项 F 的近似计算，基于 Schlick 公式，但它 根据粗糙度调整了菲涅尔的最大反射率，用于更好地拟合粗糙材质的行为
+//cosTheta：视角方向和表面法线的夹角的余弦值
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+} 
 
 //https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf 26页
 // r = reflectance    g = edgetint（表示材料边缘的颜色变化）
@@ -298,6 +310,8 @@ vec3 MultiScatterBRDF(float NdotL, float NdotV, vec2 uv)
 {
   vec3 albedo = texture2D(uGDiffuse, uv).rgb;
   float roughness = GetGBufferuRoughness(uv);
+  NdotL = clamp(NdotL, 0.001, 0.995);
+  NdotV = clamp(NdotV, 0.001, 0.995);
   vec3 E_o = texture2D(uBRDFLut, vec2(NdotL, roughness)).xyz;
   vec3 E_i = texture2D(uBRDFLut, vec2(NdotV, roughness)).xyz;//NdotV接近1的地方有亮斑
 
@@ -510,6 +524,12 @@ void main() {
   vec3 wo = normalize(uCameraPos - worldPos);
   vec3 normal = GetGBufferNormalWorld(vTexCoords);
   float roughness = GetGBufferuRoughness(vTexCoords);
+  // material properties
+  vec3 albedo = GetGBufferDiffuse(vTexCoords).xyz;
+  float metallic = GetGBufferuMetallic(vTexCoords);
+      
+  // input lighting data
+  vec3 reflectDir = reflect(-wo, normal); 
 
 #ifdef AREA_LIGHT
   vec3 wi = normalize(uLightDir);
@@ -575,6 +595,22 @@ void main() {
     L_ind /= float(SAMPLE_NUM);
 
     vec3 color = Lo + L_ind;
+
+#ifdef IBL
+    // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0 
+    // of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)    
+    vec3 F0 = vec3(0.04); 
+    F0 = mix(F0, albedo, metallic);
+    vec3 F = fresnelSchlickRoughness(max(dot(normal, wo), 0.0), F0, roughness);
+
+    // sample both the pre-filter map and the BRDF lut and combine them together as per the Split-Sum approximation to get the IBL specular part.
+    const float MAX_REFLECTION_LOD = 4.0;
+    vec3 prefilteredColor = textureLod(uPrefilterMap, reflectDir,  roughness * MAX_REFLECTION_LOD).rgb;    
+    vec2 brdf  = texture(uIBLBrdfLUT, vec2(max(dot(normal, wo), 0.0), roughness)).rg;
+    vec3 ambient = prefilteredColor * (F * brdf.x + brdf.y);
+
+    color += ambient;
+#endif
     //color = color / (color + vec3(1.0));
 
 //color = pow(clamp(color, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));

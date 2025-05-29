@@ -16,8 +16,7 @@ namespace ff {
 	{
 		DIRECTION_LIGHT,
 		POINT_LIGHT,
-		AREA_LIGHT,
-		IBL
+		AREA_LIGHT
 	};
 
 	class OrthographicMatrix {
@@ -111,5 +110,6 @@ namespace ff {
 
 		GLuint M_INV = 0;  //M的逆矩阵
 		GLuint FG = 0;     //GGX BRDF shadowing and Fresnel
+
 	};
 }
