@@ -340,23 +340,12 @@ namespace MiniEngine
                     {
                         //g_runtime_global_context.m_render_system->loadScene(outPath);
                         auto model = ff::AssimpLoader::load(outPath);
-                        g_runtime_global_context.m_render_system->m_rtr_secene->mOpaques.clear();
+                        auto& render_objs = g_runtime_global_context.m_render_system->m_rtr_secene->getChildren();
+                        render_objs.clear();
                         g_runtime_global_context.m_render_system->m_rtr_secene->addChild(model->mObject);
-
-                        //生成地板
-                        //TODO:地板位置可移动，地板根据材质加载纹理
-                        //auto floorGeometry = ff::BoxGeometry::create(10.0, 1.0, 10.0);
-                        //auto floorMaterial = ff::Material::create();
-                        //floorMaterial->mDiffuseMap = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/concreteTexture.png");
-                        //ff::Mesh::Ptr cubeFloor = ff::Mesh::create(floorGeometry, floorMaterial);
-                        //cubeFloor->setPosition(.0, -2.5, .0);
-                        //floorGeometry->createVAO();
-                        //floorGeometry->bindVAO();
-                        //floorGeometry->setupVertexAttributes();
-                        //g_runtime_global_context.m_render_system->m_rtr_secene->addChild(cubeFloor);
+                        g_runtime_global_context.m_render_system->m_rtr_secene->mSceneMaterialType = ff::SsrMaterialType;
                         //TODO:加载材质信息
 
-                        g_runtime_global_context.m_render_system->rtr_shader_config(ff::MeshBasicMaterialType);
                         free(outPath);
                     }
                     else if ( result == NFD_CANCEL ) {}
@@ -647,18 +636,30 @@ namespace MiniEngine
 
         if (ImGui::TreeNode("Material"))
         {
-            static int selectedOption = 0;  // 0: 未选, 1: Option1, 2: Option2...
-
-            // 仿复选框样式的互斥选项
-            ImGui::Selectable("Option 1", selectedOption == 1, ImGuiSelectableFlags_DontClosePopups);
-            if (ImGui::IsItemClicked()) selectedOption = 1;
-
-            ImGui::Selectable("Option 2", selectedOption == 2, ImGuiSelectableFlags_DontClosePopups);
-            if (ImGui::IsItemClicked()) selectedOption = 2;
-
-            const char* items[] = {"Option 1", "Option 2", "Option 3"};
+            const char* items[] = {"SSR", "Option 2", "Option 3"};
             static int currentItem = 0;
-            ImGui::Combo("Options", &currentItem, items, IM_ARRAYSIZE(items));
+            static int previousItem = -1;  // 保存上一次选择的值
+            if (ImGui::Combo("Options", &currentItem, items, IM_ARRAYSIZE(items)))
+            {
+                if (currentItem != previousItem)
+                {
+                    previousItem = currentItem;
+
+                    // 根据选项执行不同的逻辑
+                    switch (currentItem)
+                    {
+                    case 0:
+                        //onSelectOption1();  // 你定义的函数
+                        break;
+                    case 1:
+                        //onSelectOption2();
+                        break;
+                    case 2:
+                        //onSelectOption3();
+                        break;
+                    }
+                }
+            }
 
             ImGui::TreePop();
             ImGui::Spacing();

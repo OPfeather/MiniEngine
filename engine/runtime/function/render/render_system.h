@@ -27,6 +27,7 @@
 #include "runtime/function/render/rtr/objects/mesh.h"
 #include "runtime/function/render/rtr/material/material.h"
 #include "runtime/function/render/rtr/geometries/boxGeometry.h"
+#include "runtime/function/render/rtr/render/driverPrograms.h"
 
 namespace MiniEngine
 {
@@ -104,13 +105,17 @@ namespace MiniEngine
         void rtr_scene();
         void rtr_object();
         void rtr_light_model();
-        void rtr_shader_config(ff::MaterialType materialType = ff::MeshBasicMaterialType) noexcept;//生成shader并设置uniform
+        void get_shader_code(ff::ShaderType shaderType, string &vs, string &fs) noexcept;//生成shader并设置uniform
+        void config_FBO(ff::ShaderType shaderType) noexcept;
         void rtr_process_floor(glm::vec3 pos, ff::MaterialType materialType = ff::MeshBasicMaterialType);
 
         void projectObject(const ff::Object3D::Ptr& object) noexcept;
 
     private:
         void refreshFrameBuffer();
+        void phone_render();
+        void pcss_shadow_render();
+        void ssr_render();
 
         GLFWwindow *m_window;
         WindowUI *m_ui;
@@ -126,7 +131,7 @@ namespace MiniEngine
 
         ff::Frustum::Ptr m_rtr_frustum{ nullptr };
         std::shared_ptr<Shader> m_rtr_light_shader;
-        std::unordered_map<std::string, std::shared_ptr<Shader>> m_rtr_shader_map;
+        ff::DriverPrograms::Ptr m_rtr_shader_programs{ nullptr };
     
     public:
         ff::Scene::Ptr m_rtr_secene{ nullptr };
@@ -135,11 +140,20 @@ namespace MiniEngine
         unsigned int texColorBuffer, texDepthBuffer, framebuffer= 0;
 
         unsigned int lightVAO, lightIndexCount = 0;
-        glm::vec3 lightPos= glm::vec3(5.0f, 5.0f, 0.0f);
+        glm::vec3 lightPos= glm::vec3(2.5f, 6.0f, 4.0f);
         unsigned int flooreVAO, floorIndexCount = 0;
 
-        unsigned int gBufferFBO = 0;
+        unsigned int depthBufferFBO = 0;
         GLuint depthMap = 0;
+        
+        unsigned int gBufferFBO = 0;
+        GLuint ssColorMap = 0;
+        GLuint ssDepthMap = 0;  //经过mvp变换的线性深度（离相机的距离，不是深度缓冲里归一化的深度）
+        GLuint ssNormalMap = 0;
+        GLuint ssVisibilityMap = 0;
+        GLuint ssWorldPosMap = 0;
+        GLuint gBufferRboDepth = 0; //帧缓冲对象必须有深度附件，否则不会进行深度测试
+        
         BaseRenderEnviroment m_rtr_base_env;
     };
 

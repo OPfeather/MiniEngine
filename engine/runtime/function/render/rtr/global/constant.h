@@ -148,6 +148,16 @@ namespace ff {
 		AreaLightMaterialType
 	};
 
+	enum ShaderType {
+		DepthShader,
+		ShadowShader,
+		PhongShader,
+		PcssShader,
+		SsrGbufferShader,
+		SsrShader,
+		BrdfShader
+	};
+
 
 
 	//geometry---------------

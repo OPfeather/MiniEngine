@@ -237,6 +237,17 @@ namespace ff {
 			material->mNormalMap = processTexture(aiTextureType_NORMALS, scene, aimaterial, rootPath);
 					
 			material->mSpecularMap = processTexture(aiTextureType_SPECULAR, scene, aimaterial, rootPath);
+
+			//读取漫反射颜色（没有DiffuseMap时使用）
+			aiColor3D kdColor(0.f, 0.f, 0.f);
+			if (aimaterial->Get(AI_MATKEY_COLOR_DIFFUSE, kdColor) == AI_SUCCESS) {
+				material->mKd[0] = kdColor.r;
+				material->mKd[1] = kdColor.g;
+				material->mKd[2] = kdColor.b;
+			}
+			else {
+				std::cout << "No diffuse color (Kd) found." << std::endl;
+			}
 			
 			materials.push_back(material);
 		}
@@ -439,6 +450,21 @@ namespace ff {
 		geometry->createVAO();
 		geometry->bindVAO();
 		geometry->setupVertexAttributes();
+
+		// 获取材质
+    if (mesh->mMaterialIndex >= 0)
+    {
+        aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+        
+        aiColor3D kdColor(0.f, 0.f, 0.f);
+        if (material->Get(AI_MATKEY_COLOR_DIFFUSE, kdColor) == AI_SUCCESS)
+        {
+            std::cout << "Diffuse Color (Kd): "
+                      << kdColor.r << ", "
+                      << kdColor.g << ", "
+                      << kdColor.b << std::endl;
+        }
+    }
 
 		return object;
 	}
