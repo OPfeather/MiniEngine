@@ -344,7 +344,7 @@ namespace MiniEngine
                         auto& render_objs = g_runtime_global_context.m_render_system->m_rtr_secene->getChildren();
                         render_objs.clear();
                         g_runtime_global_context.m_render_system->m_rtr_secene->addChild(model->mObject);
-                        g_runtime_global_context.m_render_system->m_rtr_secene->mSceneMaterialType = ff::SsrMaterialType;
+                        
                         //TODO:加载材质信息
                         g_runtime_global_context.m_render_system->m_rtr_secene->mBRDFLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_E_LUT.png", nullptr, 0, 0, true);
                         g_runtime_global_context.m_render_system->m_rtr_secene->mEavgLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_Eavg_LUT.png", nullptr, 0, 0, true);
@@ -649,17 +649,34 @@ namespace MiniEngine
 
             if (ImGui::Checkbox("SkyBox", &g_runtime_global_context.m_render_system->m_rtr_base_env.isRenderSkyBox))
             {
-                std::vector<std::string> cubePaths = {
-                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/right.jpg",
-                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/left.jpg",
-                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/top.jpg",
-                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/bottom.jpg",
-                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/front.jpg",
-                        "E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/skybox/back.jpg",
-                };
-                g_runtime_global_context.m_render_system->m_rtr_base_env.skyBox = ff::CubeTextureLoader::load(cubePaths);
-                g_runtime_global_context.m_render_system->m_rtr_base_env.skyBox->setCubeTexture();
-                g_runtime_global_context.m_render_system->rtr_process_skybox();
+                if (g_runtime_global_context.m_render_system->m_rtr_base_env.isRenderSkyBox)
+                {
+                    
+                    nfdchar_t* outPath = nullptr;
+                    nfdresult_t result = NFD_PickFolder(nullptr, &outPath);
+                    std::string folderPath;
+                    if (result == NFD_OKAY)
+                    {
+                        folderPath = outPath; // 获取路径
+                        free(outPath); // 释放内存
+                        std::vector<std::string> cubePaths = {
+                        folderPath + "/right.jpg",
+                        folderPath + "/left.jpg",
+                        folderPath + "/top.jpg",
+                        folderPath + "/bottom.jpg",
+                        folderPath + "/front.jpg",
+                        folderPath + "/back.jpg",
+                        };
+                        g_runtime_global_context.m_render_system->m_rtr_base_env.skyBox = ff::CubeTextureLoader::load(cubePaths);
+                        g_runtime_global_context.m_render_system->m_rtr_base_env.skyBox->setCubeTexture();
+                        g_runtime_global_context.m_render_system->rtr_process_skybox();
+                    }
+                    else
+                    {
+                        g_runtime_global_context.m_render_system->m_rtr_base_env.isRenderSkyBox = false;
+                    }
+
+                }
             }
             
 
@@ -669,7 +686,7 @@ namespace MiniEngine
 
         if (ImGui::TreeNode("Real-time Rendering"))
         {
-            const char* items[] = {"SSR", "Option 2", "Option 3"};
+            const char* items[] = {"PBR", "Phong"};
             static int currentItem = 0;
             static int previousItem = -1;  // 保存上一次选择的值
             if (ImGui::Combo("Options", &currentItem, items, IM_ARRAYSIZE(items)))
@@ -682,13 +699,12 @@ namespace MiniEngine
                     switch (currentItem)
                     {
                     case 0:
-                        //onSelectOption1();  // 你定义的函数
+                        g_runtime_global_context.m_render_system->m_rtr_secene->mSceneMaterialType = ff::SsrMaterialType;
+                        g_runtime_global_context.m_render_system->updateFBO = true;
                         break;
                     case 1:
-                        //onSelectOption2();
-                        break;
-                    case 2:
-                        //onSelectOption3();
+                        g_runtime_global_context.m_render_system->m_rtr_secene->mSceneMaterialType = ff::MeshPhongMaterialType;
+                        g_runtime_global_context.m_render_system->updateFBO = true;
                         break;
                     }
                 }

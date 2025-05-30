@@ -106,7 +106,6 @@ namespace MiniEngine
         void startRendering();
         void stopRendering();
 
-        void rtr_scene();
         void rtr_object();
         void rtr_light_model();
         void rtr_skybox();
@@ -120,9 +119,6 @@ namespace MiniEngine
     private:
         void refreshFrameBuffer();
         void phone_render();
-        void pcss_shadow_render();
-        void ssr_render();
-        void pbr_render();
         void pbr_ssr_render();
         void renderQuad();
 
@@ -139,8 +135,8 @@ namespace MiniEngine
         std::shared_ptr<PathTracing::PathTracer> m_path_tracer;
 
         ff::Frustum::Ptr m_rtr_frustum{ nullptr };
-        std::shared_ptr<Shader> m_rtr_light_shader;
-        std::shared_ptr<Shader> m_rtr_skybox_shader;
+        std::shared_ptr<Shader> m_rtr_light_shader{ nullptr };
+        std::shared_ptr<Shader> m_rtr_skybox_shader{ nullptr };
         ff::DriverPrograms::Ptr m_rtr_shader_programs{ nullptr };
     
     public:

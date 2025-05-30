@@ -218,6 +218,17 @@ namespace ff {
 			else {
 				std::cout << "No diffuse color (Kd) found." << std::endl;
 			}
+
+			//读取镜面反射颜色
+			aiColor3D ksColor(0.f, 0.f, 0.f);
+			if (aimaterial->Get(AI_MATKEY_COLOR_SPECULAR, ksColor) == AI_SUCCESS) {
+				material->mKs[0] = ksColor.r;
+				material->mKs[1] = ksColor.g;
+				material->mKs[2] = ksColor.b;
+			}
+			else {
+				std::cout << "No specular color (Ks) found." << std::endl;
+			}
 			
 			materials.push_back(material);
 		}
@@ -426,6 +437,15 @@ namespace ff {
                       << kdColor.g << ", "
                       << kdColor.b << std::endl;
         }
+
+		aiColor3D ksColor(0.f, 0.f, 0.f);
+		if (material->Get(AI_MATKEY_COLOR_SPECULAR, ksColor) == AI_SUCCESS)
+		{
+			std::cout << "Specular Color (Kd): "
+				<< ksColor.r << ", "
+				<< ksColor.g << ", "
+				<< ksColor.b << std::endl;
+		}
     }
 
 		return object;

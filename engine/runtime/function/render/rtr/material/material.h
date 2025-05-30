@@ -86,6 +86,8 @@ namespace ff {
 
 		std::vector<float> mKd{ 1.0f, 1.0f, 1.0f };  //漫反射颜色，没有mDiffuseMap使用该属性
 
+		std::vector<float> mKs{ 1.0f, 1.0f, 1.0f };  //镜面反射颜色，没有mSpecularMap使用该属性
+
 	protected:
 		ID mID{ 0 };
 		std::string mType;
