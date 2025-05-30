@@ -359,7 +359,7 @@ vec3 EvalDirectionalLight(vec2 uv) {
 }
 
 bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
-  float step = 0.05;
+  float step = 0.02;
   const int totalStepTimes = 500; 
   int curStepTimes = 0;
 
@@ -373,7 +373,7 @@ bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
     float rayDepth = GetDepth(curPos);
     float gBufferDepth = GetGBufferDepth(screenUV);
 
-    if(rayDepth - gBufferDepth > 0.0001){
+    if(rayDepth - gBufferDepth > 0.0001 && rayDepth - gBufferDepth < 0.1){
       hitPos = curPos;
       return true;
     }
@@ -512,7 +512,7 @@ vec3 EvalBRDF(vec3 wi, vec3 wo, vec2 uv) {
 }
 #endif //AREA_LIGHT
 
-#define SAMPLE_NUM 10
+#define SAMPLE_NUM 1
 
 void main() {
   float s = InitRand(gl_FragCoord.xy);
