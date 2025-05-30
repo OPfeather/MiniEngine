@@ -21,6 +21,8 @@ namespace ff {
 		//我们可以指定整个场景里面，所有物体一起使用哪个material
 		//不管各个物体是否拥有自己的material，都被强制使用这个material
 		Material::Ptr	mOverrideMaterial = nullptr;
+		MaterialType mSceneMaterialType = MeshBasicMaterialType;
+
 
 		//天空盒
 		CubeTexture::Ptr mBackground = nullptr;

@@ -83,6 +83,8 @@ namespace ff {
 		//specularMap
 		Texture::Ptr	mSpecularMap{ nullptr };
 
+		std::vector<float> mKd{ 1.0f, 1.0f, 1.0f };  //漫反射颜色，没有mDiffuseMap使用该属性
+
 	protected:
 		ID mID{ 0 };
 		std::string mType;
