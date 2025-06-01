@@ -17,6 +17,7 @@ namespace ff {
 		prefixVertex.append(parameters->mHasColor ? "#define HAS_COLOR\n" : "");
 		prefixVertex.append(parameters->mDenoise ? "#define DENOISE\n" : "");
 		prefixVertex.append(parameters->mTaa ? "#define TAA\n" : "");
+		prefixVertex.append(parameters->mSSAO ? "#define SSAO\n" : "");
 
 		prefixFragment.append(parameters->mHasNormal ? "#define HAS_NORMAL\n" : "");
 		prefixFragment.append(parameters->mHasUV ? "#define HAS_UV\n" : "");
@@ -28,6 +29,7 @@ namespace ff {
 		prefixFragment.append(parameters->mDenoise ? "#define DENOISE\n" : "");
 		prefixFragment.append(parameters->mTaa ? "#define TAA\n" : "");
 		prefixFragment.append(parameters->mIBL ? "#define IBL\n" : "");
+		prefixFragment.append(parameters->mSSAO ? "#define SSAO\n" : "");
 		switch(parameters->mLightType){
 			case DIRECTION_LIGHT:
 				prefixFragment.append("#define DIRECTION_LIGHT\n");
@@ -178,7 +180,7 @@ namespace ff {
 		const Object3D::Ptr& object,
 		LightType lightType,
 		std::string vsCode, std::string fsCode,
-		bool denoise, bool taa, bool ibl
+		bool denoise, bool taa, bool ibl, bool ssao
 	) {
 		auto parameters = DriverProgram::Parameters::create();
 
@@ -190,6 +192,7 @@ namespace ff {
 		parameters->mDenoise = denoise;
 		parameters->mTaa = taa;
 		parameters->mIBL = ibl;
+		parameters->mSSAO = ssao;
 
 		if (material == nullptr || object == nullptr)
 		{
@@ -251,6 +254,7 @@ namespace ff {
 		keyString.append(std::to_string(parameters->mDenoise));
 		keyString.append(std::to_string(parameters->mTaa));
 		keyString.append(std::to_string(parameters->mIBL));
+		keyString.append(std::to_string(parameters->mSSAO));
 
 		return hasher(keyString);
 	}

@@ -346,8 +346,7 @@ namespace MiniEngine
                         g_runtime_global_context.m_render_system->m_rtr_secene->addChild(model->mObject);
                         
                         //TODO:加载材质信息
-                        g_runtime_global_context.m_render_system->m_rtr_secene->mBRDFLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_E_LUT.png", nullptr, 0, 0, true);
-                        g_runtime_global_context.m_render_system->m_rtr_secene->mEavgLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_Eavg_LUT.png", nullptr, 0, 0, true);
+                        
                         g_runtime_global_context.m_render_system->rtr_process_floor(g_runtime_global_context.m_render_system->m_rtr_base_env.floorPos);
                         free(outPath);
                     }
@@ -719,6 +718,10 @@ namespace MiniEngine
                 g_runtime_global_context.m_render_system->updateFBO = true;
             }
             if (ImGui::Checkbox("TAA", &g_runtime_global_context.m_render_system->mTaa))
+            {
+                g_runtime_global_context.m_render_system->updateFBO = true;
+            }
+            if (ImGui::Checkbox("SSAO", &g_runtime_global_context.m_render_system->mSsao))
             {
                 g_runtime_global_context.m_render_system->updateFBO = true;
             }

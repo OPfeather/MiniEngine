@@ -156,7 +156,8 @@ namespace ff {
 		SsrGbufferShader,
 		SsrShader,
 		BrdfShader,
-		PostProcessShader
+		PostProcessShader,
+		SsaoShader
 	};
 
 

@@ -33,6 +33,7 @@ namespace ff {
 			bool		mDenoise{ false };
 			bool		mTaa{ false };
 			bool        mIBL{ false };
+			bool        mSSAO{ false };
 		};
 
 		using Ptr = std::shared_ptr<DriverProgram>;
@@ -144,7 +145,7 @@ namespace ff {
 			const Object3D::Ptr& object,
 			LightType lightType,
 			std::string vsCode, std::string fsCode,
-			bool denoise = false, bool taa = false, bool ibl = false);
+			bool denoise = false, bool taa = false, bool ibl = false, bool ssao = false);
 
 		HashType getProgramCacheKey(const DriverProgram::Parameters::Ptr& parameters) noexcept;
 

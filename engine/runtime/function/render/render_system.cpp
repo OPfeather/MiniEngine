@@ -23,6 +23,11 @@ namespace MiniEngine
         clear();
     }
 
+    float ourLerp(float a, float b, float f)
+    {
+        return a + f * (b - a);
+    }
+
     void RenderSystem::initialize(RenderSystemInitInfo init_info)
     {
         std::shared_ptr<ConfigManager> config_manager = g_runtime_global_context.m_config_manager;
@@ -68,9 +73,27 @@ namespace MiniEngine
         m_path_tracer = std::make_shared<PathTracing::PathTracer>();
 
         m_rtr_secene = ff::Scene::create();
+        m_rtr_secene->mBRDFLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_E_LUT.png", nullptr, 0, 0, true);
+        m_rtr_secene->mEavgLut = ff::TextureLoader::load("E:/myProject/gameEngine/PiccoloRenderEngine/MiniEngine/engine/editor/demo/texture/GGX_Eavg_LUT.png", nullptr, 0, 0, true);
         m_rtr_frustum = ff::Frustum::create();
         m_rtr_shader_programs = ff::DriverPrograms::create();
         m_rtr_base_env.light = ff::Light::create(m_rtr_base_env.lightPos);
+
+        // generate sample kernel
+        std::uniform_real_distribution<GLfloat> randomFloats(0.0, 1.0); // generates random floats between 0.0 and 1.0
+        std::default_random_engine generator;
+        for (unsigned int i = 0; i < 64; ++i)
+        {
+            glm::vec3 sample(randomFloats(generator) * 2.0 - 1.0, randomFloats(generator) * 2.0 - 1.0, randomFloats(generator));//z分量范围为0-1，因为是法线正方向
+            sample = glm::normalize(sample);
+            sample *= randomFloats(generator);
+            float scale = float(i) / 64.0f;
+
+            // scale samples s.t. they're more aligned to center of kernel
+            scale = ourLerp(0.1f, 1.0f, scale * scale);//采样点集中在原点附近
+            sample *= scale;
+            ssaoKernel.push_back(sample);
+        }
     }
 
     void RenderSystem::renderQuad()
@@ -158,45 +181,6 @@ namespace MiniEngine
 
     void RenderSystem::phone_render()
     {
-        //m_render_shader->use();
-        //glm::mat4 projection = m_render_camera->getPersProjMatrix();
-        //glm::mat4 view = m_render_camera->getViewMatrix();
-        //m_render_shader->setMat4("projection", projection);
-        //m_render_shader->setMat4("view", view);
-
-        //m_render_shader->setVec3("viewPos", m_render_camera->Position);
-        //m_render_shader->setInt("diffuse_map", 0);
-        //m_render_shader->setInt("specular_map", 1);
-        //for (auto obj : m_rtr_secene->mOpaques)
-        //{
-        //    obj->updateWorldMatrix();
-        //    glm::mat4 model = obj->getWorldMatrix();
-        //    m_render_shader->setMat4("model", model);
-        //    if (obj->getMaterial()->mDiffuseMap)
-        //    {
-        //        glActiveTexture(GL_TEXTURE0);
-        //        glBindTexture(GL_TEXTURE_2D, obj->getMaterial()->mDiffuseMap->mGlTexture);
-        //    }
-        //    if (obj->getMaterial()->mSpecularMap)
-        //    {
-        //        glActiveTexture(GL_TEXTURE1);
-        //        glBindTexture(GL_TEXTURE_2D, obj->getMaterial()->mSpecularMap->mGlTexture);
-        //    }
-
-        //    obj->getGeometry()->bindVAO();
-        //    auto index = obj->getGeometry()->getIndex();
-        //    auto position = obj->getGeometry()->getAttribute("position");
-        //    if (index)
-        //    {
-        //        glDrawElements(GL_TRIANGLES, index->getCount(), ff::toGL(index->getDataType()), 0);
-        //    }
-        //    else
-        //    {
-        //        glDrawArrays(GL_TRIANGLES, 0, position->getCount());
-        //    }
-        //    glBindVertexArray(0);
-        //}
-
         std::string depth_shader_vs;
         std::string depth_shader_fs;
         std::string phong_shader_vs;
@@ -315,22 +299,14 @@ namespace MiniEngine
 
     void RenderSystem::pbr_ssr_render()
     {
-        std::string depth_shader_vs;
-        std::string depth_shader_fs;
-        std::string gBuffer_shader_vs;
-        std::string gBuffer_shader_fs;
-        std::string pbr_ssr_shader_vs;
-        std::string pbr_ssr_shader_fs;
-        std::string post_process_shader_vs;
-        std::string post_process_shader_fs;
-        ff::DriverProgram::Ptr depth_shader = nullptr;
-        ff::DriverProgram::Ptr gBuffer_shader = nullptr;
-        ff::DriverProgram::Ptr pbr_ssr_shader = nullptr;
-        ff::DriverProgram::Ptr post_process_shader = nullptr;
+        
         ff::DriverProgram::Parameters::Ptr para = nullptr;
         HashType cacheKey = 0;
 
         //psaa1:渲染深度
+        std::string depth_shader_vs;
+        std::string depth_shader_fs;
+        ff::DriverProgram::Ptr depth_shader = nullptr;
         get_shader_code(ff::DepthShader, depth_shader_vs, depth_shader_fs);
         config_FBO(ff::DepthShader);
 
@@ -366,6 +342,9 @@ namespace MiniEngine
         }
 
         //pass2：渲染gBuffer
+        std::string gBuffer_shader_vs;
+        std::string gBuffer_shader_fs;
+        ff::DriverProgram::Ptr gBuffer_shader = nullptr;
         get_shader_code(ff::SsrGbufferShader, gBuffer_shader_vs, gBuffer_shader_fs);
         config_FBO(ff::SsrGbufferShader);
         glEnable(GL_STENCIL_TEST);
@@ -463,7 +442,53 @@ namespace MiniEngine
 
         }
 
+        //SSAO
+        if (m_rtr_base_env.isRenderSkyBox && mSsao)
+        {
+            config_FBO(ff::SsaoShader);
+            std::string ssao_shader_vs;
+            std::string ssao_shader_fs;
+            ff::DriverProgram::Ptr ssao_shader = nullptr;
+
+            get_shader_code(ff::SsaoShader, ssao_shader_vs, ssao_shader_fs);
+
+            para = m_rtr_shader_programs->getParameters(
+                nullptr, nullptr, m_rtr_base_env.light->mType, ssao_shader_vs, ssao_shader_fs,
+                mDenoise, mTaa, m_rtr_base_env.isRenderSkyBox, mSsao);
+            cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+            ssao_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
+
+            ssao_shader->use();
+            glm::mat4 projection = m_render_camera->getPersProjMatrix();
+            glm::mat4 view = m_render_camera->getViewMatrix();
+            ssao_shader->setMat4("uProjectionMatrix", projection);
+            ssao_shader->setMat4("uViewMatrix", view);
+
+            ssao_shader->setInt("uTexNoise", 0);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, noiseTexture);
+
+            ssao_shader->setInt("uGNormalWorld", 1);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, ssNormalMap);
+
+            ssao_shader->setInt("uGPosWorld", 2);
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, ssWorldPosMap);
+
+            ssao_shader->setFloat("uScreenWidth", m_viewport.width);
+            ssao_shader->setFloat("uScreenHeight", m_viewport.height);
+
+            for (unsigned int i = 0; i < 64; ++i)
+                ssao_shader->setVec3("uSamples[" + std::to_string(i) + "]", ssaoKernel[i]);
+
+            renderQuad();
+        }
+
         //pass3:屏幕空间光追
+        std::string pbr_ssr_shader_vs;
+        std::string pbr_ssr_shader_fs;
+        ff::DriverProgram::Ptr pbr_ssr_shader = nullptr;
         config_FBO(ff::SsrShader);
         glEnable(GL_STENCIL_TEST);
         glStencilFunc(GL_EQUAL, 1, 0xFF);
@@ -478,7 +503,7 @@ namespace MiniEngine
 
         para = m_rtr_shader_programs->getParameters(
             nullptr, nullptr, m_rtr_base_env.light->mType, pbr_ssr_shader_vs, pbr_ssr_shader_fs,
-            mDenoise, mTaa, m_rtr_base_env.isRenderSkyBox);
+            mDenoise, mTaa, m_rtr_base_env.isRenderSkyBox, mSsao);
         cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
         pbr_ssr_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
 
@@ -554,12 +579,19 @@ namespace MiniEngine
         glActiveTexture(GL_TEXTURE4);
         glBindTexture(GL_TEXTURE_2D, ssWorldPosMap);
 
-        pbr_ssr_shader->setInt("uBRDFLut", 5);
-        glActiveTexture(GL_TEXTURE5);
-        glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mBRDFLut->mGlTexture);
-        pbr_ssr_shader->setInt("uEavgLut", 6);
-        glActiveTexture(GL_TEXTURE6);
-        glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mEavgLut->mGlTexture);
+        if (m_rtr_secene->mBRDFLut && m_rtr_secene->mBRDFLut->mGlTexture)
+        {
+            pbr_ssr_shader->setInt("uBRDFLut", 5);
+            glActiveTexture(GL_TEXTURE5);
+            glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mBRDFLut->mGlTexture);
+        }
+        
+        if (m_rtr_secene->mEavgLut && m_rtr_secene->mEavgLut->mGlTexture)
+        {
+            pbr_ssr_shader->setInt("uEavgLut", 6);
+            glActiveTexture(GL_TEXTURE6);
+            glBindTexture(GL_TEXTURE_2D, m_rtr_secene->mEavgLut->mGlTexture);
+        }
 
         if (m_rtr_base_env.isRenderSkyBox)
         {
@@ -569,12 +601,20 @@ namespace MiniEngine
             pbr_ssr_shader->setInt("uIBLBrdfLUT", 10);
             glActiveTexture(GL_TEXTURE10);
             glBindTexture(GL_TEXTURE_2D, m_rtr_base_env.brdfLUTTexture);
+            if (mSsao)
+            {
+                pbr_ssr_shader->setInt("uSsaoInput", 11);
+                glActiveTexture(GL_TEXTURE11);
+                glBindTexture(GL_TEXTURE_2D, ssaoColorBuffer);
+            }
         }
 
         renderQuad();
-
-        
+ 
         // draw models in the scene
+        std::string post_process_shader_vs;
+        std::string post_process_shader_fs;
+        ff::DriverProgram::Ptr post_process_shader = nullptr;
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glViewport(0, 0, m_viewport.width, m_viewport.height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -928,6 +968,11 @@ namespace MiniEngine
             vertexPath = (config_manager->getShaderFolder() / "post_process.vs").generic_string();
             fragmentPath = (config_manager->getShaderFolder() / "post_process.fs").generic_string();
             break;
+
+        case ff::SsaoShader:
+            vertexPath = (config_manager->getShaderFolder() / "ssao.vs").generic_string();
+            fragmentPath = (config_manager->getShaderFolder() / "ssao.fs").generic_string();
+            break;
        
        default:
            vertexPath = (config_manager->getShaderFolder() / "lit.vs").generic_string();
@@ -1008,6 +1053,18 @@ namespace MiniEngine
                 curFramebuffer = 0;
                 curColor = 0;
                 curDepthBuffer = 0;
+            }
+            if (ssaoFBO != 0)
+            {
+                glDeleteFramebuffers(1, &ssaoFBO);
+                glDeleteTextures(1, &ssaoColorBuffer);
+                ssaoFBO = 0;
+                ssaoColorBuffer = 0;
+            }
+            if (noiseTexture != 0)
+            {
+                glDeleteTextures(1, &noiseTexture);
+                noiseTexture = 0;
             }
             frameCount = 0;
             updateFBO = false;
@@ -1177,12 +1234,48 @@ namespace MiniEngine
                 //glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
                 break;
+            case ff::SsaoShader:
+                if (ssaoFBO == 0)
+                {
+                    glGenFramebuffers(1, &ssaoFBO);
+                    glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
+                    // SSAO color buffer
+                    glGenTextures(1, &ssaoColorBuffer);
+                    glBindTexture(GL_TEXTURE_2D, ssaoColorBuffer);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, m_viewport.width, m_viewport.height, 0, GL_RED, GL_FLOAT, NULL);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ssaoColorBuffer, 0);
+                    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+                        std::cout << "SSAO Framebuffer not complete!" << std::endl;
+                }
+                if (noiseTexture == 0)
+                {
+                    std::uniform_real_distribution<GLfloat> randomFloats(0.0, 1.0); // generates random floats between 0.0 and 1.0
+                    std::default_random_engine generator;
+                    std::vector<glm::vec3> ssaoNoise;
+                    for (unsigned int i = 0; i < 16; i++)
+                    {
+                        glm::vec3 noise(randomFloats(generator) * 2.0 - 1.0, randomFloats(generator) * 2.0 - 1.0, 0.0f); // rotate around z-axis (in view space)
+                        ssaoNoise.push_back(noise);
+                    }
+                    glGenTextures(1, &noiseTexture);
+                    glBindTexture(GL_TEXTURE_2D, noiseTexture);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 4, 4, 0, GL_RGB, GL_FLOAT, &ssaoNoise[0]);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+                }
+                glViewport(0, 0, m_viewport.width, m_viewport.height);
+                glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
+                glClear(GL_COLOR_BUFFER_BIT);
+                break;
         }
-        
-        
+
     }
 
-    void RenderSystem::rtr_process_floor(glm::vec3 pos, ff::MaterialType materialType) {
+    void RenderSystem::rtr_process_floor(glm::vec3 pos) {
         if (m_rtr_base_env.isRenderFloor)
         {
             if (m_rtr_base_env.floor)

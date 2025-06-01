@@ -1,3 +1,5 @@
+out vec4 FragColor;
+
 #ifdef DIRECTION_LIGHT
 uniform vec3 uLightDir;
 #endif //DIRECTION_LIGHT
@@ -23,7 +25,7 @@ uniform sampler2D uGDepth;
 uniform sampler2D uGNormalWorld;
 uniform sampler2D uGVRM;
 uniform sampler2D uGPosWorld;
-uniform sampler2D uBRDFLut;
+uniform sampler2D uBRDFLut;  //这个和uIBLBrdfLUT的区别：该brdf预计算时，将F0当作1，因此没有split sum，以后可删掉一个
 uniform sampler2D uEavgLut;
 
 #ifdef DENOISE
@@ -36,10 +38,12 @@ uniform samplerCube uPrefilterMap;
 uniform sampler2D uIBLBrdfLUT;
 #endif //IBL
 
+#ifdef SSAO
+uniform sampler2D uSsaoInput;
+#endif
+
 in mat4 vWorldToScreen;
 in vec2 vTexCoords;
-
-out vec4 FragColor;
 
 #define M_PI 3.1415926535897932384626433832795
 #define TWO_PI 6.283185307
@@ -309,16 +313,20 @@ vec3 GetGBufferDiffuse(vec2 uv) {
 vec3 MultiScatterBRDF(float NdotL, float NdotV, vec2 uv)
 {
   vec3 albedo = texture2D(uGDiffuse, uv).rgb;
+  float metallic = GetGBufferuMetallic(uv);
+  vec3 F0 = vec3(0.04);
+  F0 = mix(F0, albedo, metallic);
   float roughness = GetGBufferuRoughness(uv);
-  NdotL = clamp(NdotL, 0.001, 0.995);
+  NdotL = clamp(NdotL, 0.001, 0.995);  //不clamp的话NdotV接近1的地方有暗斑，应该是精度导致的采样问题，也可能是预计算出的问题
   NdotV = clamp(NdotV, 0.001, 0.995);
   vec3 E_o = texture2D(uBRDFLut, vec2(NdotL, roughness)).xyz;
-  vec3 E_i = texture2D(uBRDFLut, vec2(NdotV, roughness)).xyz;//NdotV接近1的地方有亮斑
+  vec3 E_i = texture2D(uBRDFLut, vec2(NdotV, roughness)).xyz;
 
   vec3 E_avg = texture2D(uEavgLut, vec2(0, roughness)).xyz;
   // copper
-  vec3 edgetint = vec3(0.827, 0.792, 0.678);
-  vec3 F_avg = AverageFresnel(albedo, edgetint);
+  //vec3 edgetint = vec3(0.827, 0.792, 0.678);
+  vec3 edgetint = sqrt(albedo);  //先暂时这样近似
+  vec3 F_avg = AverageFresnel(F0, edgetint);
   
   // TODO: To calculate fms and missing energy here
   vec3 fms = ( vec3(1.0) - E_o ) * (vec3(1.0) - E_i) / ( M_PI * (vec3(1.0) - E_avg) );//在NdotL或NdotV接近1的地方，有小暗斑
@@ -608,9 +616,11 @@ void main() {
     vec3 prefilteredColor = textureLod(uPrefilterMap, reflectDir,  roughness * MAX_REFLECTION_LOD).rgb;    
     vec2 brdf  = texture(uIBLBrdfLUT, vec2(max(dot(normal, wo), 0.0), roughness)).rg;
     vec3 ambient = prefilteredColor * (F * brdf.x + brdf.y);
-
+#ifdef SSAO
+    ambient = ambient * texture(uSsaoInput, vTexCoords).r;
+#endif //SSAO
     color += ambient;
-#endif
+#endif //IBL
     //color = color / (color + vec3(1.0));
 
 //color = pow(clamp(color, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
