@@ -52,10 +52,10 @@ namespace MiniEngine
     {
         public:
             ff::Light::Ptr light{ nullptr };
-            glm::vec3 lightPos{ 5,3,-5 };
+            glm::vec3 lightPos{ 5,3,5 };
 
             bool isRenderFloor = false;
-            glm::vec3 floorPos{ 0,-3,0 };
+            glm::vec3 floorPos{ 0,0,0 };
             ff::Mesh::Ptr floor{ nullptr };
             ff::Material::Ptr floorMaterial{ nullptr };
             ff::BoxGeometry::Ptr floorGeometry{ nullptr };
@@ -111,7 +111,7 @@ namespace MiniEngine
         void rtr_skybox();
         void get_shader_code(ff::ShaderType shaderType, string &vs, string &fs) noexcept;//生成shader并设置uniform
         void config_FBO(ff::ShaderType shaderType) noexcept;
-        void rtr_process_floor(glm::vec3 pos, ff::MaterialType materialType = ff::MeshBasicMaterialType);
+        void rtr_process_floor(glm::vec3 pos);
         void rtr_process_skybox();
 
         void projectObject(const ff::Object3D::Ptr& object) noexcept;
@@ -169,11 +169,17 @@ namespace MiniEngine
         unsigned int curFramebuffer = 0;
         GLuint curColor = 0;
         GLuint curDepthBuffer = 0;
+
+        unsigned int ssaoFBO = 0;
+        unsigned int ssaoColorBuffer = 0;
+        std::vector<glm::vec3> ssaoKernel;// generate sample kernel
+        unsigned int noiseTexture = 0;
         
         BaseRenderEnviroment m_rtr_base_env;
 
         bool mDenoise = false;
         bool mTaa = false;
+        bool mSsao = false;
 
         bool updateFBO = false;  //修改窗口大小、切换材质、抗锯齿或者降噪时需要更新
 
