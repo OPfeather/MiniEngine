@@ -5,12 +5,13 @@
 
 namespace MiniEngine::PathTracing
 {
+    //BVH类，构建BVH，判断光线是否击中BVH
     class BVH : public Hittable
     {
     public:
-        shared_ptr<Hittable> left;
+        shared_ptr<Hittable> left;//该 BVH 节点的左右子节点
         shared_ptr<Hittable> right;
-        AABB box;
+        AABB box;//当前 BVH 节点包围的整体 AABB 区域，用于快速裁剪射线是否有必要递归下去
 
         BVH() = default;
         BVH(const HittableList &list) : BVH(list.objects, 0, list.objects.size()) {}
@@ -18,13 +19,14 @@ namespace MiniEngine::PathTracing
         {
             auto objects = src_objects; // Create a modifiable array of the source scene objects
 
-            int axis = static_cast<int>(linearRand(0, 3));
+            int axis = static_cast<int>(linearRand(0, 3));  //随机选择划分轴（x=0, y=1, z=2）
             auto comparator = (axis == 0)   ? compareX
                               : (axis == 1) ? compareY
                                             : compareZ;
 
             size_t object_span = end - start;
 
+            //若只有一个物体：左右子树都是它自己
             if (object_span == 1)
             {
                 left = right = objects[start];
@@ -56,7 +58,7 @@ namespace MiniEngine::PathTracing
             if (!left->aabb(box_left) || !right->aabb(box_right))
                 std::cerr << "No bounding box in BVH constructor.\n";
 
-            box = AABB::getSurroundingBox(box_left, box_right);
+            box = AABB::getSurroundingBox(box_left, box_right);//包围左右节点的大的包围盒
         }
 
         virtual bool hit(const Ray &r, float t_min, float t_max, HitRecord &rec) const override;

@@ -53,8 +53,8 @@ namespace MiniEngine
         float Near;
         float Far;
         float Aperture{0.f};
-        float FocusDistance{10.f};
-        int FocusMode{0};
+        float FocusDistance{10.f};//焦距
+        int FocusMode{0}; //是否自动计算焦距。0：自动计算
 
         glm::mat4 projection = glm::mat4(1.0f);
         glm::mat4 preProjection = glm::mat4(1.0f);

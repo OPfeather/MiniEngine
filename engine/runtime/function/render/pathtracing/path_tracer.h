@@ -18,7 +18,7 @@ namespace MiniEngine::PathTracing
     {
         ivec2 Resolution;
         int SampleCount;
-        int BounceLimit;
+        int BounceLimit;//光线最大弹射次数，这样限制会导致能量损失。TODO:使用俄罗斯轮盘赌的方式决定光线是否弹射
         bool ImportSample;
         bool BVH;
         bool MultiThread;

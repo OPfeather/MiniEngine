@@ -6,10 +6,14 @@
 
 namespace MiniEngine::PathTracing
 {
+    //分别表示XY平面、XZ平面、YZ平面上的轴对齐矩形面
     class RectangleXY : public Hittable
     {
     public:
-        shared_ptr<Material> m;
+        shared_ptr<Material> m;//材质指针
+        //x0, x1：矩形在 x 方向的起止范围
+        //y0, y1：矩形在 y 方向的起止范围
+        //k：平面所在的固定坐标轴值（如 RectangleXY 在 z=k 处）
         float x0, x1, y0, y1, k;
 
         RectangleXY(){};
@@ -19,6 +23,7 @@ namespace MiniEngine::PathTracing
         {
             // The bounding box must have non-zero width in each dimension, so pad the Z
             // dimension a small amount.
+            //因为矩形是二维的，所以在固定轴方向（厚度方向）上是零宽度，为了让 BVH 工作正常，人为扩展一个很小的厚度（padding），使它可以被包含在 AABB 中
             bounding_box = AABB(vec3(x0, y0, k - 0.0001), vec3(x1, y1, k + 0.0001));
             return true;
         }

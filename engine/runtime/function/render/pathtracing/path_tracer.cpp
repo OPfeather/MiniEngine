@@ -65,31 +65,39 @@ namespace MiniEngine::PathTracing
             return vec3(0, 0, 0);
         }
 
+        //mesh里只有光源和phong材质物体
         if (!mesh.hit(r, EPS, INF, rec))
         {
             return vec3(0, 0, 0);
         }
 
-        ScatterRecord srec;
-        vec3 emitted = rec.mat_ptr->emitted(r, rec);
+        ScatterRecord srec;//记录了散射方向、pdf、是否镜面等
+        vec3 emitted = rec.mat_ptr->emitted(r, rec);//命中物体的自发光项
 
+        //某些材质如纯发光体是不能散射的，若无法散射，表示光线就此终结，只返回自发光项
+        //命中光源
         if (!rec.mat_ptr->scatter(r, rec, srec))
         {
             return emitted;
         }
 
+        //镜面反射是确定方向（delta distribution），不能使用 pdf，所以直接追踪下一条射线
+        //命中镜面反射材质
         if (srec.is_specular)
         {
             return srec.attenuation * getColor(srec.specular_ray, mesh, lights, depth - 1, importance_sampling);
         }
 
-        Ray scattered;
-        float pdf;
+        //命中漫反射材质
+        Ray scattered;//光的方向
+        float pdf;//采样的概率
         if (importance_sampling)
         {
-            auto light_ptr = make_shared<HittablePDF>(lights, rec.hit_point.Position);
-            MixturePDF p(light_ptr, srec.pdf_ptr, 0.5);
+            auto light_ptr = make_shared<HittablePDF>(lights, rec.hit_point.Position);//光源几何的方向分布（命中点的直接光照）
+            //混合 PDF 用 50% 概率采样其中任意一个分布，即一般概率采用直接光照，一般概率采样漫反射间接光照
+            MixturePDF p(light_ptr, srec.pdf_ptr, 0.5);//srec.pdf_ptr 是 BSDF 给出的分布，比如 CosinePDF
 
+            //如果选择的是光源，那么p.generate()产生的是光源上均匀采样的一点到rec.hit_point.Position的方向（重要性采样）
             scattered = Ray(rec.hit_point.Position, p.generate());
             pdf = p.value(scattered.direction);
         }
@@ -124,6 +132,7 @@ namespace MiniEngine::PathTracing
         HittableList mesh;
         if (init_info->BVH)
         {
+            //构造BVH
             state = 1;
             mesh.add(make_shared<BVH>(mesh_data));
         }
@@ -141,14 +150,16 @@ namespace MiniEngine::PathTracing
         auto fov = m_camera->Zoom;
         auto aspect_ratio = (float)init_info->Resolution.x/(float)init_info->Resolution.y;
 
+        //该相机仅用于自动计算焦距
         Camera laser(lookfrom, lookat, vup, fov, 0.f, 1.f, aspect_ratio);
                 
         f32 dist_to_focus;
+        //若不手动设焦距，则从画面中心发出一条射线，看它打在场景上哪个位置，自动计算焦距（成像平面和投影矩阵的近平面不是一个东西，成像平面是焦距的平面）
         if (!m_camera->FocusMode)
         { 
-            Ray r = laser.getRay(0.5f, 0.5f);
+            Ray r = laser.getRay(0.5f, 0.5f);//视口中心的采样点
             HitRecord rec;
-            mesh.hit(r, EPS, INF, rec);
+            mesh.hit(r, EPS, INF, rec);//最近的命中点
             dist_to_focus = rec.t;
         }
         else
@@ -156,6 +167,7 @@ namespace MiniEngine::PathTracing
             dist_to_focus = m_camera->FocusDistance;
         }
 
+        //构造景深相机
         Camera cam(lookfrom, lookat, vup, fov, aperture, dist_to_focus, aspect_ratio);
 
         state = 2;
@@ -167,6 +179,7 @@ namespace MiniEngine::PathTracing
             if (init_info->MultiThread)
             {
                 // multi thread
+                //每个线程处理一列像素
                 tbb::parallel_for(0, width,
                                 [this, j, samples, max_depth, importance_sampling , &cam, &mesh, &lights](int i)
                                 {
@@ -175,7 +188,7 @@ namespace MiniEngine::PathTracing
                     {
                         if (should_stop_tracing)
                             return;
-
+                        ////linearRand(0.f, 1.f)用于在当前像素内部 jitter 抖动，避免固定网格采样带来的 aliasing 锯齿
                         f32 u = (i + linearRand(0.f, 1.f)) / (width - 1);
                         f32 v = (j + linearRand(0.f, 1.f)) / (height - 1);
                         Ray r = cam.getRay(u, v);
@@ -215,6 +228,7 @@ namespace MiniEngine::PathTracing
         }
 
 
+        //使用的是 Intel® Open Image Denoise（OIDN） 库对图像进行 降噪处理
         if (init_info->Denoise)
         {
             state = 3;
@@ -244,7 +258,7 @@ namespace MiniEngine::PathTracing
             filter.commit();
 
             // Filter the image
-            filter.execute();
+            filter.execute();//调用 CPU-side DNN 推理进行降噪，降噪器内部使用了基于 ResNet 的小型卷积网络
 
             // Check for errors
             const char *errorMessage;
@@ -319,6 +333,8 @@ namespace MiniEngine::PathTracing
         return color;
     }
 
+    //从model里获取光源和物体三角形数据，分别放入mesh_data里，并将光源放入light_data
+    //mesh_data的三角形都是phong材质和光源
     void PathTracer::transferModelData(shared_ptr<Model> m_model)
     {
         // clean data buffer
@@ -354,6 +370,7 @@ namespace MiniEngine::PathTracing
             light_with_area.insert(pair<shared_ptr<Hittable>, float>(light, light->getArea()));
         }
         
+        //按光源面积从大到小排序
         vector<pair<shared_ptr<Hittable>, float>> map_vec;
         for(map<shared_ptr<Hittable>, float>::iterator it = light_with_area.begin(); it != light_with_area.end(); it++)
         {

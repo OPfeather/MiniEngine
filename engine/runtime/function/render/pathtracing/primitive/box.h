@@ -6,6 +6,7 @@
 
 namespace MiniEngine::PathTracing
 {
+    //构建一个轴对齐的长方体（AABB 盒子）
     class Box : public Hittable
     {
     public:
@@ -25,6 +26,7 @@ namespace MiniEngine::PathTracing
         box_min = p0;
         box_max = p1;
 
+        //添加 6 个面
         sides.add(make_shared<RectangleXY>(p0.x, p1.x, p0.y, p1.y, p1.z, ptr));
         sides.add(make_shared<RectangleXY>(p0.x, p1.x, p0.y, p1.y, p0.z, ptr));
 
@@ -40,6 +42,7 @@ namespace MiniEngine::PathTracing
         return sides.hit(r, t_min, t_max, rec);
     }
 
+    //平移变换装饰器，将一个几何体平移某个偏移量后参与求交
     class Translate : public Hittable
     {
     public:
@@ -63,6 +66,8 @@ namespace MiniEngine::PathTracing
         return true;
     }
 
+    //绕 Y 轴旋转装饰器
+    //将一个几何体绕 Y 轴旋转一个角度，用于添加模型姿态或构建复杂场景
     class RotateY : public Hittable
     {
     public:

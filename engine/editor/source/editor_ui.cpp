@@ -345,8 +345,6 @@ namespace MiniEngine
                         render_objs.clear();
                         g_runtime_global_context.m_render_system->m_rtr_secene->addChild(model->mObject);
                         
-                        //TODO:加载材质信息
-                        
                         g_runtime_global_context.m_render_system->rtr_process_floor(g_runtime_global_context.m_render_system->m_rtr_base_env.floorPos);
                         free(outPath);
                     }
@@ -935,6 +933,13 @@ namespace MiniEngine
                 ImGui::PushID("Render");
                 if (ImGui::Button("Render"))
                 {
+                    nfdchar_t *outPath = NULL;
+                    nfdresult_t result = NFD_OpenDialog( NULL, NULL, &outPath );
+                    if ( result == NFD_OKAY ) 
+                    {
+                        g_runtime_global_context.m_render_system->loadScene(outPath);
+                        free(outPath);
+                    }
                     g_is_editor_mode = false;
 
                     g_editor_global_context.m_render_system->setupCanvas((float)m_rendering_init_info->Resolution.x/(float)m_rendering_init_info->Resolution.y,1.f);

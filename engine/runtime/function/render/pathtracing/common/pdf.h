@@ -10,14 +10,17 @@ namespace MiniEngine::PathTracing
     public:
         virtual ~PDF() {}
 
+        //评估某个归一化方向 direction 的 概率密度 p(ω)
         virtual float value(const vec3 &direction) const = 0;
+        //按自身分布随机生成一个方向并返回其 世界空间向量
         virtual vec3 generate() const = 0;
     };
 
+    //余弦加权半球分布
     class CosinePDF : public PDF
     {
     public:
-        ONB onb;
+        ONB onb;//余弦分布先在局部空间采样，随后通过 ONB 把向量变到世界空间
 
         CosinePDF(const vec3 &normal)
         {
@@ -36,11 +39,12 @@ namespace MiniEngine::PathTracing
         }
     };
 
+    //面向 几何体 / 光源 的 pdf
     class HittablePDF : public PDF
     {
     public:
-        vec3 o;
-        shared_ptr<Hittable> ptr;
+        vec3 o;// 采样起点（着色点）
+        shared_ptr<Hittable> ptr;// 要采样的几何体（通常是一组光源）
 
         HittablePDF(shared_ptr<Hittable> p, const vec3 &origin) : ptr(p), o(origin) {}
 
@@ -55,6 +59,7 @@ namespace MiniEngine::PathTracing
         }
     };
 
+    //多分布混合
     class MixturePDF : public PDF
     {
     public:

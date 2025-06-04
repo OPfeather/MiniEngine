@@ -12,31 +12,36 @@ namespace MiniEngine::PathTracing
 
     struct ScatterRecord
     {
-        Ray specular_ray;
-        bool is_specular;
-        vec3 attenuation;
-        shared_ptr<PDF> pdf_ptr;
+        Ray specular_ray;//若是镜面材质，返回反射/折射射线
+        bool is_specular;//是否镜面材质，决定是否跳过 pdf
+        vec3 attenuation;//材质颜色衰减
+        shared_ptr<PDF> pdf_ptr;//非镜面材质用于 importance sample 的方向 PDF
     };
 
+    //所有材质的抽象接口，定义了光线与表面交互的基本操作
     class Material
     {
     public:
+        //决定是否以及如何散射（反射/折射）射线
         virtual bool scatter(const Ray &r_in, const HitRecord &rec, ScatterRecord &srec) const
         {
             return false;
         }
 
+        //返回路径散射方向的概率密度（用于非 specular 情况）
         virtual float scatterPDF(const Ray &r_in, const HitRecord &rec, const Ray &scattered) const
         {
             return 0;
         }
 
+        //若为光源材质，则返回其发射的光
         virtual vec3 emitted(const Ray &r_in, const HitRecord &rec) const
         {
             return vec3(0, 0, 0);
         }
     };
 
+    //漫反射材质    
     class Lambertian : public Material
     {
     public:
@@ -59,14 +64,16 @@ namespace MiniEngine::PathTracing
         }
     };
 
+    //金属材质
     class Metal : public Material
     {
     public:
         vec3 albedo;
-        float fuzz;
+        float fuzz;//控制粗糙度
 
         Metal(const vec3 &a, float f) : albedo(a), fuzz(f < 1 ? f : 1) {}
 
+        //反射方向为镜面反射 + 模糊噪声（fuzz 控制粗糙度）
         virtual bool scatter(const Ray &r_in, const HitRecord &rec, ScatterRecord &srec) const override
         {
             vec3 reflected = reflect(r_in.direction, rec.hit_point.Normal);
@@ -78,10 +85,11 @@ namespace MiniEngine::PathTracing
         }
     };
 
+    //玻璃/透明材质
     class Dielectric : public Material
     {
     public:
-        float ir;
+        float ir;//折射率
 
         Dielectric(float index_of_refraction) : ir(index_of_refraction) {}
 
@@ -119,6 +127,7 @@ namespace MiniEngine::PathTracing
         }
     };
 
+    //发光材质
     class Emission : public Material
     {
     public:
@@ -140,6 +149,7 @@ namespace MiniEngine::PathTracing
         }
     };
 
+    //支持纹理、镜面、高光、透明，目前用的都是该材质
     class Phong : public Material
     {
     public:
@@ -159,11 +169,12 @@ namespace MiniEngine::PathTracing
                 return false;
             }
 
-            if (is_specular(mat) && linearRand(0.f, 1.f) < 0.5f)
+            if (is_specular(mat) && linearRand(0.f, 1.f) < 0.5f)//使用 50% 概率选择镜面反射（一次只采样一个方向，所以当我们混合多个分布时，必须用随机方式选择采样哪个分布）
             {
                 vec3 reflected = reflect(r_in.direction, rec.hit_point.Normal);
-                vec3 noise = 1.f / log(mat.Ns) * ballRand(1.f);
+                vec3 noise = 1.f / log(mat.Ns) * ballRand(1.f);//log(Ns) 控制模糊强度，Ns 越大 → 表面越光滑  → noise 越小。ballRand(1.f) 是在单位球内随机采样向量
 
+                //把扰动向量投影到世界空间上
                 vec3 normal = normalize(rec.hit_point.Normal);
                 vec3 tangent = normalize(cross(normal, cross(reflected, normal)));
                 vec3 bi_tangent = normalize(cross(normal, tangent));
@@ -172,6 +183,8 @@ namespace MiniEngine::PathTracing
                 f32 noise_t = dot(noise, tangent);
                 f32 noise_bt = dot(noise, bi_tangent);
 
+                //对反射方向（靠近 normal）附近变化更小
+                //在法线方向不变太多，避免贴面扰动
                 noise_t = noise_t / dot(normalize(reflected), normal);
                 noise_bt = noise_bt * dot(normalize(reflected), normal);
 

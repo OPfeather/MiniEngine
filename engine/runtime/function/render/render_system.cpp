@@ -743,25 +743,28 @@ namespace MiniEngine
             m_canvas_shader->setMat4("model", model);
             m_render_canvas->Draw(m_canvas_shader);
         }
-        else if (m_render_model)
-        {
-            m_render_shader->use();
-            glm::mat4 projection = m_render_camera->getPersProjMatrix();
-            glm::mat4 view = m_render_camera->getViewMatrix();
-            glm::mat4 model = glm::mat4(1.0f);
-            m_render_shader->setMat4("projection", projection);
-            m_render_shader->setMat4("view", view);
-            m_render_shader->setMat4("model", model);
-            m_render_shader->setVec3("viewPos", m_render_camera->Position);
-            m_render_model->Draw(m_render_shader);
-            
-        }
+        //else if (m_render_model)
+        //{
+        //    m_render_shader->use();
+        //    glm::mat4 projection = m_render_camera->getPersProjMatrix();
+        //    glm::mat4 view = m_render_camera->getViewMatrix();
+        //    glm::mat4 model = glm::mat4(1.0f);
+        //    m_render_shader->setMat4("projection", projection);
+        //    m_render_shader->setMat4("view", view);
+        //    m_render_shader->setMat4("model", model);
+        //    m_render_shader->setVec3("viewPos", m_render_camera->Position);
+        //    m_render_model->Draw(m_render_shader);
+        //    
+        //}
         else if (m_rtr_secene->getChildren().size() > 0)
         {
             rtr_object();
         }
-        rtr_light_model();
-        rtr_skybox();
+        if (g_is_editor_mode)
+        {
+            rtr_light_model();
+            rtr_skybox();
+        }
 
         // draw editor ui
         glBindFramebuffer(GL_FRAMEBUFFER, 0);

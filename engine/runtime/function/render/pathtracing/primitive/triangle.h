@@ -18,6 +18,7 @@ namespace MiniEngine::PathTracing
         virtual bool hit(const Ray &r, float t_min, float t_max, HitRecord &rec) const override;
         virtual bool aabb(AABB &output_box) const override;
 
+        //计算从某点发出方向 v 命中该三角形的 PDF 值（即三角形相对于origin的立体角大小的倒数，相当于三角形是光源，从光源上均匀采样一个到点origin的射线概率）
         virtual float getPDF(const vec3 &origin, const vec3 &v) const override
         {
             HitRecord rec;
@@ -32,6 +33,7 @@ namespace MiniEngine::PathTracing
             return distance_squared / (cosine * area);
         }
 
+        //从三角形上均匀采样一点，并返回该点相对于 origin 的方向
         virtual vec3 random(const vec3 &origin) const override
         {
 
@@ -51,6 +53,7 @@ namespace MiniEngine::PathTracing
             return random_point - origin;
         }
 
+        //计算三角形面积
         virtual float getArea() const override
         {
             vec3 edge1 = vertices[1].Position - vertices[0].Position;
@@ -60,6 +63,7 @@ namespace MiniEngine::PathTracing
         }
 
     private:
+        //根据重心坐标插值得到纹理坐标
         vec2 interpTexcoord(float u, float v) const
         {
             vec2 st = u * vertices[1].Texcoord + v * vertices[2].Texcoord + (1 - u - v) * vertices[0].Texcoord;
@@ -67,6 +71,7 @@ namespace MiniEngine::PathTracing
         }
     };
 
+    //Möller–Trumbore 算法（快速准确的射线与三角形相交算法）
     bool Triangle::hit(const Ray &r, float t_min, float t_max, HitRecord &rec) const
     {
         // ray intersection
@@ -76,7 +81,7 @@ namespace MiniEngine::PathTracing
         auto q = cross(r.direction, edge2);
         auto a = dot(edge1, q);
 
-        if (fabs(a) < EPS * EPS)
+        if (fabs(a) < EPS * EPS)//射线与三角形平行，不相交
             return false;
 
         auto f = 1.0 / a;
