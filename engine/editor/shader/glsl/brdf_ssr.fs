@@ -306,13 +306,13 @@ float GetGBufferuMetallic(vec2 uv) {
 
 vec3 GetGBufferDiffuse(vec2 uv) {
   vec3 diffuse = texture2D(uGDiffuse, uv).xyz;
-  //diffuse = pow(diffuse, vec3(2.2));
+  diffuse = pow(diffuse, vec3(2.2));
   return diffuse;
 }
 
 vec3 MultiScatterBRDF(float NdotL, float NdotV, vec2 uv)
 {
-  vec3 albedo = texture2D(uGDiffuse, uv).rgb;
+  vec3 albedo = GetGBufferDiffuse(uv);
   float metallic = GetGBufferuMetallic(uv);
   vec3 F0 = vec3(0.04);
   F0 = mix(F0, albedo, metallic);
@@ -579,7 +579,7 @@ void main() {
 // #else
 //     vec2 Xi = Hammersley(uint(i), uint(SAMPLE_NUM));
 // #endif  //DENOISE
-    vec2 Xi = Hammersley(uint(i), uint(SAMPLE_NUM));
+    vec2 Xi = Hammersley(uint(int(s * 1024 + i)%1024), uint(1024));
     vec3 H = ImportanceSampleGGX(Xi, N, roughness);
     vec3 L  = normalize(2.0 * dot(V, H) * H - V);
     

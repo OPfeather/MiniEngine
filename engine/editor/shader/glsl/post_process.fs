@@ -1,5 +1,7 @@
 in  vec2 vTexCoords;
-out vec4 FragColor;
+
+layout(location = 0) out vec4 FragColor;
+layout(location = 1) out vec4 HdrColor;
 
 uniform sampler2D uCurrentColor;
 uniform sampler2D uPreviousColor;
@@ -7,6 +9,8 @@ uniform sampler2D uVelocityMap;
 uniform float uScreenWidth;
 uniform float uScreenHeight;
 uniform int uFrameCount;
+uniform sampler2D uBloomBlur;
+uniform float uBloomStrength = 0.3f;
 
 #ifdef DENOISE
 uniform sampler2D uGNormalWorld;
@@ -109,7 +113,7 @@ vec3 JointBilateralFilter()
     vec2 deltaRes = vec2(1.0 / uScreenWidth, 1.0 / uScreenHeight);
     vec3 center_postion  = texture2D(uGPosWorld, vTexCoords).xyz;
     vec3 center_color = texture2D(uCurrentColor, vTexCoords).xyz;
-    vec3 center_normal  = normalize(texture2D(uGNormalWorld, vTexCoords).xyz);
+    vec3 center_normal  = texture2D(uGNormalWorld, vTexCoords).xyz;
 
     float total_weight = 0;
     vec3 final_color = vec3(0);
@@ -134,7 +138,7 @@ vec3 JointBilateralFilter()
             float normal_angle = acos(clamp(dot(center_normal, normal), -1.0, 1.0));
             float d_normal = normal_angle * normal_angle / (2 * SIGMA_NORMAL * SIGMA_NORMAL);
 
-            float plane_distance = .0f;
+            float plane_distance = 0.0f;
             if(position_distance > epsilon)
             {
                 plane_distance = dot(center_normal, ((postion - center_postion) / position_distance));
@@ -146,10 +150,11 @@ vec3 JointBilateralFilter()
             final_color += color * weight;
         }
     }
-    return final_color/total_weight;
+    return final_color/(total_weight+epsilon);
 }
 vec3 Reprojection()
 {
+    float epsilon = 1e-5f;
     vec3 nowColor = JointBilateralFilter();
     if(uFrameCount == 0)
     {
@@ -159,11 +164,12 @@ vec3 Reprojection()
     vec2 velocity = texture(uVelocityMap, vTexCoords).rg;
     vec2 offsetUV = vTexCoords - velocity;
     //上一帧在屏幕外
-    if(offsetUV.x < 0 || offsetUV.x > 1 || offsetUV.y < 0 || offsetUV.y > 1)
+    if(offsetUV.x < epsilon || offsetUV.x > 1-epsilon || offsetUV.y < epsilon || offsetUV.y > 1-epsilon)
     {
         return nowColor;
     }
     vec3 preColor = texture(uPreviousColor, offsetUV).rgb;
+    //preColor = clamp(preColor, vec3(0.0), vec3(10.0));
 
     nowColor = RGB2YCoCgR(ToneMap(nowColor));
     preColor = RGB2YCoCgR(ToneMap(preColor));
@@ -206,8 +212,16 @@ vec2 getClosestOffset()
 
 #endif //TAA
 
+vec3 bloom(vec3 hdrColor)
+{
+    vec3 bloomColor = texture(uBloomBlur, vTexCoords).rgb;
+    return hdrColor + uBloomStrength * bloomColor;
+    //return mix(hdrColor, bloomColor, uBloomStrength); // linear interpolation
+}
+
 void main()
 {
+    vec3 color = vec3(0.0);
 #ifdef TAA
 #ifdef DENOISE
     vec3 nowColor = JointBilateralFilter();
@@ -216,32 +230,43 @@ void main()
 #endif //DENOISE
     if(uFrameCount == 0)
     {
-        FragColor = vec4(nowColor, 1.0);
-        return;
+        color = nowColor;
     }
+    else
+    {
+        // 周围3x3内距离最近的速度向量
+        vec2 velocity = texture(uVelocityMap, getClosestOffset()).rg;
+        vec2 offsetUV = clamp(vTexCoords - velocity, vec2(0.0), vec2(1.0));
+        vec3 preColor = texture(uPreviousColor, offsetUV).rgb;
 
-    // 周围3x3内距离最近的速度向量
-    vec2 velocity = texture(uVelocityMap, getClosestOffset()).rg;
-    vec2 offsetUV = clamp(vTexCoords - velocity, vec2(0.0), vec2(1.0));
-    vec3 preColor = texture(uPreviousColor, offsetUV).rgb;
+        nowColor = RGB2YCoCgR(ToneMap(nowColor));
+        preColor = RGB2YCoCgR(ToneMap(preColor));
 
-    nowColor = RGB2YCoCgR(ToneMap(nowColor));
-    preColor = RGB2YCoCgR(ToneMap(preColor));
+        preColor = clipAABB(nowColor, preColor);
 
-    preColor = clipAABB(nowColor, preColor);
+        preColor = UnToneMap(YCoCgR2RGB(preColor));
+        nowColor = UnToneMap(YCoCgR2RGB(nowColor));
 
-    preColor = UnToneMap(YCoCgR2RGB(preColor));
-    nowColor = UnToneMap(YCoCgR2RGB(nowColor));
-
-    float c = 0.05;
-    FragColor = vec4(c * nowColor + (1-c) * preColor, 1.0);
+        float c = 0.05;
+        color = c * nowColor + (1-c) * preColor;
+    }
+    
 #else
 
 #ifdef DENOISE
-    FragColor = vec4(Reprojection(), 1.0);
+    color = Reprojection();
 #else
-    FragColor = vec4(texture(uCurrentColor, vTexCoords).rgb, 1.0);
+    color = texture(uCurrentColor, vTexCoords).rgb;
 #endif //DENOISE
-    
 #endif //TAA
+    vec3 result = bloom(color); 
+    //result = color;
+
+    // tone mapping
+    result = result / (result + vec3(1.0));
+    // also gamma correct while we're at it
+    result = pow(result, vec3(1.0 / 2.2));
+    FragColor = vec4(result, 1.0);
+
+    HdrColor = vec4(color, 1.0);
 }

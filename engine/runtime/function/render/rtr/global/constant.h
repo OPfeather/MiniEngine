@@ -157,7 +157,10 @@ namespace ff {
 		SsrShader,
 		BrdfShader,
 		PostProcessShader,
-		SsaoShader
+		SsaoShader,
+		BloomUpsampleShader,
+		BloomDownsampleShader,
+		BloomShader
 	};
 
 

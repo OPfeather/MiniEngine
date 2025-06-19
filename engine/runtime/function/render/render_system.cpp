@@ -94,6 +94,33 @@ namespace MiniEngine
             sample *= scale;
             ssaoKernel.push_back(sample);
         }
+
+        ff::DriverProgram::Parameters::Ptr para = nullptr;
+        HashType cacheKey = 0;
+
+        std::string bloom_downsample_shader_vs;
+        std::string bloom_downsample_shader_fs;
+        ff::DriverProgram::Ptr bloom_downsample_shader = nullptr;
+
+        get_shader_code(ff::BloomDownsampleShader, bloom_downsample_shader_vs, bloom_downsample_shader_fs);
+
+        para = m_rtr_shader_programs->getParameters(
+            nullptr, nullptr, m_rtr_base_env.light->mType, bloom_downsample_shader_vs, bloom_downsample_shader_fs);
+        cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+        bloom_downsample_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
+
+        std::string bloom_upsample_shader_vs;
+        std::string bloom_upsample_shader_fs;
+        ff::DriverProgram::Ptr bloom_upsample_shader = nullptr;
+
+        get_shader_code(ff::BloomUpsampleShader, bloom_upsample_shader_vs, bloom_upsample_shader_fs);
+
+        para = m_rtr_shader_programs->getParameters(
+            nullptr, nullptr, m_rtr_base_env.light->mType, bloom_upsample_shader_vs, bloom_upsample_shader_fs);
+        cacheKey = m_rtr_shader_programs->getProgramCacheKey(para);
+        bloom_upsample_shader = m_rtr_shader_programs->acquireProgram(para, cacheKey);
+
+        bloomRenderer.Init(window_size[0], window_size[1], bloom_upsample_shader, bloom_downsample_shader);
     }
 
     void RenderSystem::renderQuad()
@@ -148,6 +175,8 @@ namespace MiniEngine
         m_rtr_light_shader->setMat4("projection", projection);
         m_rtr_light_shader->setMat4("view", view);
         m_rtr_light_shader->setMat4("model", model);
+        glm::vec3 lightRadiance = m_rtr_base_env.light->mColor * m_rtr_base_env.light->mIntensity;
+        m_rtr_light_shader->setVec3("uLightRadiance", lightRadiance);
         m_rtr_base_env.light->light_shape_render();
      
     }
@@ -179,7 +208,7 @@ namespace MiniEngine
         }
     }
 
-    void RenderSystem::phone_render()
+    void RenderSystem::phong_render()
     {
         std::string depth_shader_vs;
         std::string depth_shader_fs;
@@ -491,6 +520,7 @@ namespace MiniEngine
         ff::DriverProgram::Ptr pbr_ssr_shader = nullptr;
         config_FBO(ff::SsrShader);
         glEnable(GL_STENCIL_TEST);
+        glDisable(GL_DEPTH_TEST);
         glStencilFunc(GL_EQUAL, 1, 0xFF);
         //模板测试在片段着色器前进行，这里将gbuffer的模板复制过来，进行模板测试，避免渲染空白区域光照
         glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
@@ -610,7 +640,24 @@ namespace MiniEngine
         }
 
         renderQuad();
- 
+
+        //bloom pass
+        glDisable(GL_STENCIL_TEST);
+        glEnable(GL_DEPTH_TEST);
+        //rtr_light_model();
+
+        config_FBO(ff::BloomShader);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, bloomFBO);
+        glBlitFramebuffer(0, 0, m_viewport.width, m_viewport.height,
+            0, 0, m_viewport.width, m_viewport.height,
+            GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        rtr_light_model();
+
+        float bloomFilterRadius = 0.002f;
+        bloomRenderer.UpdateBloom(m_viewport.width, m_viewport.height);
+        bloomRenderer.RenderBloomTexture(bloomColorBuffer, bloomFilterRadius);
+
         // draw models in the scene
         std::string post_process_shader_vs;
         std::string post_process_shader_fs;
@@ -620,6 +667,7 @@ namespace MiniEngine
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_STENCIL_TEST);
         glDisable(GL_DEPTH_TEST);
+        //config_FBO(ff::PostProcessShader);
 
         get_shader_code(ff::PostProcessShader, post_process_shader_vs, post_process_shader_fs);
 
@@ -665,13 +713,16 @@ namespace MiniEngine
             }
             
         }
+        post_process_shader->setInt("uBloomBlur", 6);
+        glActiveTexture(GL_TEXTURE6);
+        glBindTexture(GL_TEXTURE_2D, bloomRenderer.BloomTexture());
         renderQuad();
 
         if (mTaa || mDenoise)
         {
             frameCount++;
             glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);  // 来源
-            glReadBuffer(GL_COLOR_ATTACHMENT0);
+            glReadBuffer(GL_COLOR_ATTACHMENT1);
 
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, preFramebuffer);  // 目标
             glDrawBuffer(GL_COLOR_ATTACHMENT0);
@@ -683,11 +734,11 @@ namespace MiniEngine
                 GL_NEAREST            // 过滤方式（或 GL_LINEAR）
             );
         }
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, gBufferFBO);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, bloomFBO);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
         glBlitFramebuffer(0, 0, m_viewport.width, m_viewport.height,
             0, 0, m_viewport.width, m_viewport.height,
-            GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
+            GL_DEPTH_BUFFER_BIT , GL_NEAREST);
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glEnable(GL_DEPTH_TEST);
     }
@@ -713,10 +764,10 @@ namespace MiniEngine
             pbr_ssr_render();
             break;
         case ff::MeshPhongMaterialType:
-            phone_render();
+            phong_render();
             break;
         default:
-            phone_render();
+            phong_render();
         } 
     }
 
@@ -762,7 +813,6 @@ namespace MiniEngine
         }
         if (g_is_editor_mode)
         {
-            rtr_light_model();
             rtr_skybox();
         }
 
@@ -812,6 +862,7 @@ namespace MiniEngine
         {
             glDeleteFramebuffers(1, &framebuffer);
             glDeleteTextures(1, &texColorBuffer);
+            glDeleteTextures(1, &texHdrColorBuffer);
             glDeleteRenderbuffers(1, &texDepthBuffer);
         }
 
@@ -823,8 +874,22 @@ namespace MiniEngine
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glBindTexture(GL_TEXTURE_2D, 0);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texColorBuffer, 0);
+
+        glGenTextures(1, &texHdrColorBuffer);
+        glBindTexture(GL_TEXTURE_2D, texHdrColorBuffer);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_FLOAT, NULL);
+        //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, texHdrColorBuffer, 0);
+
+        unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+        glDrawBuffers(2, attachments);
 
         glGenRenderbuffers(1, &texDepthBuffer);
         glBindRenderbuffer(GL_RENDERBUFFER, texDepthBuffer);
@@ -892,6 +957,7 @@ namespace MiniEngine
         if (std::fabs(m_viewport.width - width) > 1e-5f || std::fabs(m_viewport.height - height) > 1e-5f)
         {
             updateFBO = true;
+            bloomRenderer.mUpdate = true;
         }
         m_viewport.x = offset_x;
         m_viewport.y = offset_y;
@@ -975,6 +1041,21 @@ namespace MiniEngine
         case ff::SsaoShader:
             vertexPath = (config_manager->getShaderFolder() / "ssao.vs").generic_string();
             fragmentPath = (config_manager->getShaderFolder() / "ssao.fs").generic_string();
+            break;
+
+        case ff::BloomUpsampleShader:
+            vertexPath = (config_manager->getShaderFolder() / "bloom_upsample.vs").generic_string();
+            fragmentPath = (config_manager->getShaderFolder() / "bloom_upsample.fs").generic_string();
+            break;
+
+        case ff::BloomDownsampleShader:
+            vertexPath = (config_manager->getShaderFolder() / "bloom_downsample.vs").generic_string();
+            fragmentPath = (config_manager->getShaderFolder() / "bloom_downsample.fs").generic_string();
+            break;
+
+        case ff::BloomShader:
+            vertexPath = (config_manager->getShaderFolder() / "bloom.vs").generic_string();
+            fragmentPath = (config_manager->getShaderFolder() / "bloom.fs").generic_string();
             break;
        
        default:
@@ -1068,6 +1149,15 @@ namespace MiniEngine
             {
                 glDeleteTextures(1, &noiseTexture);
                 noiseTexture = 0;
+            }
+            if (bloomFBO != 0)
+            {
+                glDeleteFramebuffers(1, &bloomFBO);
+                glDeleteTextures(1, &bloomColorBuffer);
+                glDeleteRenderbuffers(1, &bloomRboDepth);
+                bloomFBO = 0;
+                bloomColorBuffer = 0;
+                bloomRboDepth = 0;
             }
             frameCount = 0;
             updateFBO = false;
@@ -1272,6 +1362,70 @@ namespace MiniEngine
                 }
                 glViewport(0, 0, m_viewport.width, m_viewport.height);
                 glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
+                glClear(GL_COLOR_BUFFER_BIT);
+                break;
+
+            case ff::BloomShader:
+                if (bloomFBO == 0)
+                {
+                    glGenFramebuffers(1, &bloomFBO);
+                    glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO);
+                    // SSAO color buffer
+                    glGenTextures(1, &bloomColorBuffer);
+                    glBindTexture(GL_TEXTURE_2D, bloomColorBuffer);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_FLOAT, NULL);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, bloomColorBuffer, 0);
+                    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+                        std::cout << "Bloom Framebuffer not complete!" << std::endl;
+
+                    glGenRenderbuffers(1, &bloomRboDepth);
+                    glBindRenderbuffer(GL_RENDERBUFFER, bloomRboDepth);
+                    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_viewport.width, m_viewport.height);
+                    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+                    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, bloomRboDepth);
+                }
+                glViewport(0, 0, m_viewport.width, m_viewport.height);
+                glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                break;
+
+            case ff::PostProcessShader:
+                if (postProcessFBO == 0)
+                {
+                    glGenFramebuffers(1, &postProcessFBO);
+                    glBindFramebuffer(GL_FRAMEBUFFER, postProcessFBO);
+
+                    glGenTextures(1, &postProcessColorBuffer);
+                    glBindTexture(GL_TEXTURE_2D, postProcessColorBuffer);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, postProcessColorBuffer, 0);
+
+                    glGenTextures(1, &hdrColorBuffer);
+                    glBindTexture(GL_TEXTURE_2D, hdrColorBuffer);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, m_viewport.width, m_viewport.height, 0, GL_RGBA, GL_FLOAT, NULL);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, hdrColorBuffer, 0);
+
+                    unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+                    glDrawBuffers(2, attachments);
+
+                    glGenRenderbuffers(1, &postProcessRboDepth);
+                    glBindRenderbuffer(GL_RENDERBUFFER, postProcessRboDepth);
+                    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, m_viewport.width, m_viewport.height);
+                    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+                    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, postProcessRboDepth);
+                }
+                glViewport(0, 0, m_viewport.width, m_viewport.height);
+                glBindFramebuffer(GL_FRAMEBUFFER, postProcessFBO);
                 glClear(GL_COLOR_BUFFER_BIT);
                 break;
         }

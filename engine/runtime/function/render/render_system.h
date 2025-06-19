@@ -28,6 +28,7 @@
 #include "runtime/function/render/rtr/material/material.h"
 #include "runtime/function/render/rtr/geometries/boxGeometry.h"
 #include "runtime/function/render/rtr/render/driverPrograms.h"
+#include "runtime/function/render/rtr/render/bloom.h"
 
 namespace MiniEngine
 {
@@ -118,7 +119,7 @@ namespace MiniEngine
 
     private:
         void refreshFrameBuffer();
-        void phone_render();
+        void phong_render();
         void pbr_ssr_render();
         void renderQuad();
 
@@ -143,7 +144,7 @@ namespace MiniEngine
         ff::Scene::Ptr m_rtr_secene{ nullptr };
 
         //所有自定义的绘制都要渲染到该fbo上，最终才会显示到屏幕上
-        unsigned int texColorBuffer, texDepthBuffer, framebuffer= 0;
+        unsigned int texColorBuffer, texHdrColorBuffer, texDepthBuffer, framebuffer= 0;
 
         unsigned int flooreVAO, floorIndexCount = 0;
 
@@ -184,6 +185,16 @@ namespace MiniEngine
         bool updateFBO = false;  //修改窗口大小、切换材质、抗锯齿或者降噪时需要更新
 
         int frameCount = 0;  //当前是第几帧，从加载物体开始计算，重新加载物体或者updateFBO=true时清零
+
+        ff::BloomRenderer bloomRenderer;
+        unsigned int bloomFBO = 0;
+        unsigned int bloomColorBuffer = 0;
+        GLuint bloomRboDepth = 0;
+
+        unsigned int postProcessFBO = 0;
+        unsigned int postProcessColorBuffer = 0;
+        unsigned int hdrColorBuffer = 0;
+        GLuint postProcessRboDepth = 0;
     };
 
     
