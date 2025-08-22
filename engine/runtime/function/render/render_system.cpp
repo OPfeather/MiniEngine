@@ -658,6 +658,7 @@ namespace MiniEngine
         bloomRenderer.UpdateBloom(m_viewport.width, m_viewport.height);
         bloomRenderer.RenderBloomTexture(bloomColorBuffer, bloomFilterRadius);
 
+        //post process pass
         // draw models in the scene
         std::string post_process_shader_vs;
         std::string post_process_shader_fs;
